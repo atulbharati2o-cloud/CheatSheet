@@ -798,7 +798,61 @@ addLinkForm.addEventListener('submit', async (e) => {
                 }
             }
         } catch (err) {
-            console.error('Failed to save link to server', err);
+            console.error('Failed to add link on server', err);
+        }
+    }
+});
+
+// Submit Modal 2: Add Campus Document (PDF or URL)
+addDocForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('doc-type').value;
+    const title = document.getElementById('doc-title').value.trim();
+    const url = document.getElementById('doc-url').value.trim();
+    const note = document.getElementById('doc-note').value.trim();
+    const fileInput = document.getElementById('doc-file');
+
+    if (!type || !title) return;
+
+    const formData = new FormData();
+    formData.append('type', type);
+    formData.append('title', title);
+    if (note) formData.append('note', note);
+    if (fileInput.files.length > 0) {
+        formData.append('file', fileInput.files[0]);
+    } else if (url) {
+        formData.append('url', url);
+    }
+
+    // Optimistically update UI
+    const newDoc = { id: 'doc-' + Date.now(), type, title, url: url || '#', note: note || '', updatedAt: new Date().toISOString().split('T')[0] };
+    if (!db.campusDocs) db.campusDocs = [];
+    db.campusDocs.unshift(newDoc);
+    saveLocalBackup();
+    renderCampusView();
+    showToast(`Added document "${title}"!`);
+    addDocForm.reset();
+    addDocModal.classList.remove('open');
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/campus-docs`, {
+                method: 'POST',
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.campusDocs) {
+                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
+                    saveLocalBackup();
+                    renderCampusView();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to add campus document on server', err);
+        }
+    }
+});            console.error('Failed to save link to server', err);
         }
     }
 });

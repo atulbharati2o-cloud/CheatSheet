@@ -4,8 +4,9 @@
   "description": "Collaborative Academic Resource Vault & Campus Schedules Hub for Students and Colleagues",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "frontend": "npm run dev --prefix frontend",
+    "backend": "npm start --prefix backend",
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix backend\""
   },
   "keywords": [
     "academic",
@@ -22,5 +23,8 @@
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "mongoose": "^9.9.4"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

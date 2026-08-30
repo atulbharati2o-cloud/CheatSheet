@@ -19,7 +19,7 @@
             <div class="brand">
                 <span class="brand-mark">A</span>
                 <div>
-                    <p class="eyebrow">Shared Academic Hub</p>
+
                     <h1>Campus Resource Vault</h1>
                 </div>
             </div>
@@ -31,7 +31,7 @@
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
                     <input type="text" id="search-input" placeholder="Search resources, timetables..." aria-label="Search resources">
-                    <span class="search-kbd">Ctrl K</span>
+                    
                 </div>
                 
                 <div class="add-buttons-group">
@@ -90,25 +90,10 @@
                     <div>
                         <span class="pill">Collaborative • Semester 5 CSE Hub</span>
                         <h2>Academic Journey Link Vault</h2>
-                        <p class="description">
-                            Shared access to course drives, lecture notes, textbook PDFs, reference websites, video playlists, and special study notes.
-                        </p>
+                        
                     </div>
 
-                    <div class="stats">
-                        <div class="stat-card">
-                            <span id="stat-subjects">0</span>
-                            <p>Subjects</p>
-                        </div>
-                        <div class="stat-card">
-                            <span id="stat-links">0</span>
-                            <p>Total Links</p>
-                        </div>
-                        <div class="stat-card">
-                            <span id="stat-pinned">0</span>
-                            <p>Pinned</p>
-                        </div>
-                    </div>
+                    
                 </section>
 
                 <!-- Controls: Category Pills & View Switch -->
@@ -307,7 +292,7 @@
                     </svg>
                 </button>
             </div>
-            <form id="add-doc-form">
+            <form id="add-doc-form" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="doc-type">Document Category</label>
                     <select id="doc-type" class="form-control" required>
@@ -324,6 +309,7 @@
                 <div class="form-group">
                     <label for="doc-url">Drive Link / File URL</label>
                     <input type="url" id="doc-url" class="form-control" placeholder="https://drive.google.com/..." required>
+<input type="file" id="doc-file" class="form-control" accept="application/pdf" placeholder="Upload PDF file">
                 </div>
                 <div class="form-group">
                     <label for="doc-note">Special Note / Key Details (Optional)</label>

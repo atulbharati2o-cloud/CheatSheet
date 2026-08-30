@@ -3,6 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir, { recursive: true }); }
+const upload = multer({ dest: uploadDir });
 const mongoose = require('mongoose');
 
 const app = express();
@@ -216,26 +220,29 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 // 5. Add Campus Document (Timetable, Mess Menu, Exam Schedule, Holiday Calendar)
-app.post('/api/campus-docs', async (req, res) => {
-    const { type, title, url, note } = req.body;
-
+app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
+    const { type, title, note } = req.body;
+    // url may come from body or file upload
+    let fileUrl = '';
+    if (req.file) {
+        fileUrl = `/uploads/${req.file.filename}`;
+    } else if (req.body.url) {
+        fileUrl = req.body.url;
+    }
     if (!type || !title) {
         return res.status(400).json({ success: false, message: 'Type and title are required.' });
     }
-
     const db = await readDB();
     const newDoc = {
         id: 'doc-' + Date.now(),
         type,
         title,
-        url: url || '#',
+        url: fileUrl || '#',
         note: note || '',
         updatedAt: new Date().toISOString().split('T')[0]
     };
-
     if (!db.campusDocs) db.campusDocs = [];
     db.campusDocs.unshift(newDoc);
-
     await writeDB(db);
     res.json({ success: true, doc: newDoc, campusDocs: db.campusDocs });
 });
