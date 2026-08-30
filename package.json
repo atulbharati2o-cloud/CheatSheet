@@ -1,0 +1,24 @@
+{
+  "name": "academic-campus-hub",
+  "version": "2.0.0",
+  "description": "Collaborative Academic Resource Vault & Campus Schedules Hub for Students and Colleagues",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "academic",
+    "hub",
+    "notes",
+    "timetable",
+    "mess-menu",
+    "exam-schedule"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

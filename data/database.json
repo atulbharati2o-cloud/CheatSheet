@@ -1,0 +1,140 @@
+{
+  "resources": [
+    {
+      "category": "Quick Access",
+      "title": "Main University Drive",
+      "links": [
+        {
+          "id": "lnk-1",
+          "label": "CSE Drive",
+          "href": "https://drive.google.com/drive/folders/1tXxLKfFfA-3LmIS7XzSRTjG4d9Tw7ooS",
+          "note": "Main CSE department shared folder for all semesters",
+          "pinned": true
+        },
+        {
+          "id": "lnk-2",
+          "label": "5th Semester Drive",
+          "href": "https://drive.google.com/drive/folders/1TFjMZxKGUKWHtb3dy-XMWmFIPs9cJjtr",
+          "note": "Semester 5 course slides, lab assignments & past papers",
+          "pinned": true
+        }
+      ]
+    },
+    {
+      "category": "Core Subject",
+      "title": "Computer Networking",
+      "links": [
+        {
+          "id": "lnk-3",
+          "label": "Jim Kurose Website (PPTs)",
+          "href": "https://gaia.cs.umass.edu/kurose_ross/ppt.php",
+          "note": "Official Kurose & Ross 8th edition lecture presentation slides",
+          "pinned": false
+        },
+        {
+          "id": "lnk-4",
+          "label": "Jim Kurose YouTube Playlist",
+          "href": "https://youtube.com/playlist?list=PLByK_3hwzY3Tysh-SY9MKZhMm9wIfNOas&si=LH4uJy3BSz6syP8E",
+          "note": "Author video lectures on Socket programming & TCP/IP layer",
+          "pinned": false
+        },
+        {
+          "id": "lnk-5",
+          "label": "CN Google Drive",
+          "href": "https://drive.google.com/drive/folders/1DNI22B435dGajyfw4jJBNOeSA44rZDF2",
+          "note": "Contains lab manuals, Wireshark PCAP files & PYQ solutions",
+          "pinned": true
+        }
+      ]
+    },
+    {
+      "category": "Core Subject",
+      "title": "Operating System",
+      "links": [
+        {
+          "id": "lnk-6",
+          "label": "OS Google Drive",
+          "href": "https://drive.google.com/drive/folders/1_1iAjGGjXmdWbKSdVYTQ87E7AhuFcwRl",
+          "note": "Process synchronization notes & CPU scheduling C programs",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "category": "Core Subject",
+      "title": "NFT",
+      "links": [
+        {
+          "id": "lnk-7",
+          "label": "NFT Google Drive",
+          "href": "https://drive.google.com/drive/folders/1gE1Nq3XoCB2PH1O6s4uNZYK1Gs77ewan",
+          "note": "Network Filter & Technology study resources",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "category": "Core Subject",
+      "title": "IPU",
+      "links": [
+        {
+          "id": "lnk-8",
+          "label": "IPU Google Drive",
+          "href": "https://drive.google.com/drive/folders/1rXQeF3UbrASBfLzoutkN4d27msMVKMHt",
+          "note": "Official university syllabus & exam circulars",
+          "pinned": false
+        }
+      ]
+    }
+  ],
+  "campusDocs": [
+    {
+      "id": "doc-1",
+      "type": "timetable",
+      "title": "5th Sem CSE Class Timetable (Fall 2026)",
+      "url": "https://drive.google.com/drive/folders/1TFjMZxKGUKWHtb3dy-XMWmFIPs9cJjtr",
+      "note": "Mon-Fri 9:00 AM to 5:00 PM • Room 304, Block C",
+      "updatedAt": "2026-08-25"
+    },
+    {
+      "id": "doc-2",
+      "type": "mess",
+      "title": "Hostel Mess Weekly Menu",
+      "url": "#",
+      "note": "Special Lunch on Wednesdays & Sunday Dinner Dessert",
+      "updatedAt": "2026-08-20"
+    },
+    {
+      "id": "doc-3",
+      "type": "exam",
+      "title": "Mid-Term Examination Datesheet",
+      "url": "#",
+      "note": "Exams start 15th October. CN on Day 1, OS on Day 3.",
+      "updatedAt": "2026-08-28"
+    },
+    {
+      "id": "doc-4",
+      "type": "holiday",
+      "title": "University Academic & Holiday Calendar 2026",
+      "url": "#",
+      "note": "Includes list of gazetted holidays & semester break schedule",
+      "updatedAt": "2026-08-01"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ann-1",
+      "badge": "Exam",
+      "title": "CN Lab Assignment 2 Deadline",
+      "content": "Socket Programming assignment in Python/C is due by this Friday 11:59 PM. Submit on drive.",
+      "date": "2026-08-29"
+    },
+    {
+      "id": "ann-2",
+      "badge": "Important",
+      "title": "Guest Lecture on Cloud Operating Systems",
+      "content": "Join us on Thursday at 2:00 PM in Seminar Hall B for the guest session.",
+      "date": "2026-08-28"
+    }
+  ]
+}
