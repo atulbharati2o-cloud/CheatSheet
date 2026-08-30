@@ -4,6 +4,108 @@
 
 const API_BASE = '/api';
 const LOCAL_STORAGE_KEY = 'academic_hub_offline_backup_v3';
+const DELETED_IDS_KEY = 'academic_hub_deleted_ids_v1';
+
+function getDeletedIds() {
+    try {
+        const stored = localStorage.getItem(DELETED_IDS_KEY);
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function trackDeletedId(id) {
+    if (!id) return;
+    const set = getDeletedIds();
+    set.add(id);
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(set)));
+}
+
+function getLocalDatabase() {
+    const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!local) return null;
+    try {
+        return JSON.parse(local);
+    } catch (e) {
+        return null;
+    }
+}
+
+function mergeDatabase(serverData, localData) {
+    const deletedIds = getDeletedIds();
+    const merged = {
+        resources: [],
+        campusDocs: [],
+        announcements: []
+    };
+
+    const sResources = (serverData && serverData.resources) || [];
+    const lResources = (localData && localData.resources) || [];
+
+    const groupsMap = new Map();
+
+    function processGroup(group) {
+        if (!group || !group.title) return;
+        const titleLower = group.title.toLowerCase();
+        if (!groupsMap.has(titleLower)) {
+            groupsMap.set(titleLower, {
+                category: group.category || 'Core Subject',
+                title: group.title,
+                links: []
+            });
+        }
+        const targetGroup = groupsMap.get(titleLower);
+
+        (group.links || []).forEach(link => {
+            if (!link || !link.id) return;
+            if (deletedIds.has(link.id)) return;
+
+            const existingIdx = targetGroup.links.findIndex(l => l.id === link.id);
+            if (existingIdx === -1) {
+                targetGroup.links.push({ ...link });
+            } else {
+                targetGroup.links[existingIdx] = {
+                    ...targetGroup.links[existingIdx],
+                    ...link
+                };
+            }
+        });
+    }
+
+    sResources.forEach(processGroup);
+    lResources.forEach(processGroup);
+
+    merged.resources = Array.from(groupsMap.values()).filter(g => g.links.length > 0);
+
+    const sDocs = (serverData && serverData.campusDocs) || [];
+    const lDocs = (localData && localData.campusDocs) || [];
+    const docsMap = new Map();
+
+    [...sDocs, ...lDocs].forEach(doc => {
+        if (!doc || !doc.id) return;
+        if (deletedIds.has(doc.id)) return;
+        if (!docsMap.has(doc.id)) {
+            docsMap.set(doc.id, { ...doc });
+        }
+    });
+    merged.campusDocs = Array.from(docsMap.values());
+
+    const sAnns = (serverData && serverData.announcements) || [];
+    const lAnns = (localData && localData.announcements) || [];
+    const annsMap = new Map();
+
+    [...sAnns, ...lAnns].forEach(ann => {
+        if (!ann || !ann.id) return;
+        if (deletedIds.has(ann.id)) return;
+        if (!annsMap.has(ann.id)) {
+            annsMap.set(ann.id, { ...ann });
+        }
+    });
+    merged.announcements = Array.from(annsMap.values());
+
+    return merged;
+}
 
 // Default Fallback Data if server is unreachable
 const defaultDatabase = {
@@ -120,14 +222,15 @@ const toastContainer = document.getElementById('toast-container');
 
 // Load Data from Server API or LocalStorage Backup
 async function fetchServerData() {
+    const localData = getLocalDatabase() || defaultDatabase;
     try {
         const response = await fetch(`${API_BASE}/data`);
         if (response.ok) {
             const res = await response.json();
             if (res.success && res.data) {
-                db = res.data;
                 isServerConnected = true;
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
+                db = mergeDatabase(res.data, localData);
+                saveLocalBackup();
                 render();
                 return;
             }
@@ -137,17 +240,8 @@ async function fetchServerData() {
         isServerConnected = false;
     }
 
-    // Fallback to local storage or defaults
-    const local = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (local) {
-        try {
-            db = JSON.parse(local);
-        } catch (e) {
-            db = { ...defaultDatabase };
-        }
-    } else {
-        db = { ...defaultDatabase };
-    }
+    db = mergeDatabase(null, localData);
+    saveLocalBackup();
     render();
 }
 
@@ -217,24 +311,6 @@ function getLinkIconSvg(url) {
 
 // Toggle Pin Status
 async function togglePin(linkId) {
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources/${linkId}/pin`, { method: 'PATCH' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    db.resources = data.resources;
-                    saveLocalBackup();
-                    render();
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error('Failed to update pin on server', e);
-        }
-    }
-
-    // Local fallback
     db.resources.forEach(group => {
         group.links.forEach(link => {
             if (link.id === linkId) link.pinned = !link.pinned;
@@ -242,31 +318,30 @@ async function togglePin(linkId) {
     });
     saveLocalBackup();
     render();
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/resources/${linkId}/pin`, { method: 'PATCH' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.resources) {
+                    db = mergeDatabase({ resources: data.resources }, db);
+                    saveLocalBackup();
+                    render();
+                }
+            }
+        } catch (e) {
+            console.error('Failed to update pin on server', e);
+        }
+    }
 }
 
 // Delete Resource Link
 async function deleteLink(linkId) {
     if (!confirm('Are you sure you want to delete this resource link for everyone?')) return;
 
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources/${linkId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    db.resources = data.resources;
-                    saveLocalBackup();
-                    render();
-                    showToast('Resource link removed');
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error('Failed to delete on server', e);
-        }
-    }
+    trackDeletedId(linkId);
 
-    // Local fallback
     db.resources.forEach(group => {
         group.links = group.links.filter(l => l.id !== linkId);
     });
@@ -274,68 +349,82 @@ async function deleteLink(linkId) {
     saveLocalBackup();
     render();
     showToast('Resource link removed');
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/resources/${linkId}`, { method: 'DELETE' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.resources) {
+                    db = mergeDatabase({ resources: data.resources }, db);
+                    saveLocalBackup();
+                    render();
+                }
+            }
+        } catch (e) {
+            console.error('Failed to delete on server', e);
+        }
+    }
 }
 
 // Delete Campus Document
 async function deleteCampusDoc(docId) {
     if (!confirm('Are you sure you want to delete this document?')) return;
 
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/campus-docs/${docId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    db.campusDocs = data.campusDocs;
-                    saveLocalBackup();
-                    renderCampusView();
-                    showToast('Document deleted');
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error('Failed to delete campus doc on server', e);
-        }
-    }
+    trackDeletedId(docId);
 
-    // Local fallback
     if (db.campusDocs) {
         db.campusDocs = db.campusDocs.filter(d => d.id !== docId);
     }
     saveLocalBackup();
     renderCampusView();
     showToast('Document deleted');
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/campus-docs/${docId}`, { method: 'DELETE' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.campusDocs) {
+                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
+                    saveLocalBackup();
+                    renderCampusView();
+                }
+            }
+        } catch (e) {
+            console.error('Failed to delete campus doc on server', e);
+        }
+    }
 }
 
 // Delete Announcement
 async function deleteAnnouncement(annId) {
     if (!confirm('Are you sure you want to remove this note?')) return;
 
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/announcements/${annId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    db.announcements = data.announcements;
-                    saveLocalBackup();
-                    renderAnnouncementsView();
-                    showToast('Special note removed');
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error('Failed to delete announcement on server', e);
-        }
-    }
+    trackDeletedId(annId);
 
-    // Local fallback
     if (db.announcements) {
         db.announcements = db.announcements.filter(a => a.id !== annId);
     }
     saveLocalBackup();
     renderAnnouncementsView();
     showToast('Special note removed');
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/announcements/${annId}`, { method: 'DELETE' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.announcements) {
+                    db = mergeDatabase({ announcements: data.announcements }, db);
+                    saveLocalBackup();
+                    renderAnnouncementsView();
+                }
+            }
+        } catch (e) {
+            console.error('Failed to delete announcement on server', e);
+        }
+    }
 }
 
 // Render Tab 1: Resource Vault
@@ -678,33 +767,8 @@ addLinkForm.addEventListener('submit', async (e) => {
 
     if (!title || !label || !href) return;
 
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ category, title, label, href, note })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    db.resources = data.resources;
-                    saveLocalBackup();
-                    addLinkForm.reset();
-                    addModal.classList.remove('open');
-                    render();
-                    showToast(`Added "${label}" for everyone!`);
-                    return;
-                }
-            }
-        } catch (err) {
-            console.error('Failed to save link to server', err);
-        }
-    }
-
-    // Fallback local save
+    const newLink = { id: 'lnk-' + Date.now(), label, href, note: note || '', pinned: false };
     let group = db.resources.find(g => g.title.toLowerCase() === title.toLowerCase());
-    const newLink = { id: 'lnk-' + Date.now(), label, href, note, pinned: false };
 
     if (group) {
         group.links.push(newLink);
@@ -716,7 +780,27 @@ addLinkForm.addEventListener('submit', async (e) => {
     addLinkForm.reset();
     addModal.classList.remove('open');
     render();
-    showToast(`Added "${label}" locally!`);
+    showToast(`Added "${label}"!`);
+
+    if (isServerConnected) {
+        try {
+            const res = await fetch(`${API_BASE}/resources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category, title, label, href, note })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.resources) {
+                    db = mergeDatabase({ resources: data.resources }, db);
+                    saveLocalBackup();
+                    render();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to save link to server', err);
+        }
+    }
 });
 
 // Submit Modal 2: Add Campus Document
@@ -729,6 +813,28 @@ addDocForm.addEventListener('submit', async (e) => {
 
     if (!type || !title) return;
 
+    const newDoc = {
+        id: 'doc-' + Date.now(),
+        type,
+        title,
+        url: url || '#',
+        note,
+        updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    if (!db.campusDocs) db.campusDocs = [];
+    db.campusDocs.unshift(newDoc);
+    saveLocalBackup();
+
+    addDocForm.reset();
+    addDocModal.classList.remove('open');
+    activeTab = 'campus';
+    navTabCampus.classList.add('active');
+    navTabResources.classList.remove('active');
+    navTabAnnouncements.classList.remove('active');
+    render();
+    showToast(`Added document "${title}"`);
+
     if (isServerConnected) {
         try {
             const res = await fetch(`${API_BASE}/campus-docs`, {
@@ -738,44 +844,16 @@ addDocForm.addEventListener('submit', async (e) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.success) {
-                    db.campusDocs = data.campusDocs;
+                if (data.success && data.campusDocs) {
+                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
                     saveLocalBackup();
-                    addDocForm.reset();
-                    addDocModal.classList.remove('open');
-                    activeTab = 'campus';
-                    navTabCampus.classList.add('active');
-                    navTabResources.classList.remove('active');
-                    navTabAnnouncements.classList.remove('active');
                     render();
-                    showToast(`Added document "${title}"`);
-                    return;
                 }
             }
         } catch (err) {
             console.error('Failed to save doc to server', err);
         }
     }
-
-    // Fallback local
-    if (!db.campusDocs) db.campusDocs = [];
-    db.campusDocs.unshift({
-        id: 'doc-' + Date.now(),
-        type,
-        title,
-        url: url || '#',
-        note,
-        updatedAt: new Date().toISOString().split('T')[0]
-    });
-    saveLocalBackup();
-    addDocForm.reset();
-    addDocModal.classList.remove('open');
-    activeTab = 'campus';
-    navTabCampus.classList.add('active');
-    navTabResources.classList.remove('active');
-    navTabAnnouncements.classList.remove('active');
-    render();
-    showToast(`Added document "${title}"`);
 });
 
 // Submit Modal 3: Add Announcement
@@ -787,6 +865,27 @@ addAnnForm.addEventListener('submit', async (e) => {
 
     if (!title || !content) return;
 
+    const newAnn = {
+        id: 'ann-' + Date.now(),
+        badge,
+        title,
+        content,
+        date: new Date().toISOString().split('T')[0]
+    };
+
+    if (!db.announcements) db.announcements = [];
+    db.announcements.unshift(newAnn);
+    saveLocalBackup();
+
+    addAnnForm.reset();
+    addAnnModal.classList.remove('open');
+    activeTab = 'announcements';
+    navTabAnnouncements.classList.add('active');
+    navTabResources.classList.remove('active');
+    navTabCampus.classList.remove('active');
+    render();
+    showToast(`Posted note "${title}"`);
+
     if (isServerConnected) {
         try {
             const res = await fetch(`${API_BASE}/announcements`, {
@@ -796,43 +895,16 @@ addAnnForm.addEventListener('submit', async (e) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.success) {
-                    db.announcements = data.announcements;
+                if (data.success && data.announcements) {
+                    db = mergeDatabase({ announcements: data.announcements }, db);
                     saveLocalBackup();
-                    addAnnForm.reset();
-                    addAnnModal.classList.remove('open');
-                    activeTab = 'announcements';
-                    navTabAnnouncements.classList.add('active');
-                    navTabResources.classList.remove('active');
-                    navTabCampus.classList.remove('active');
                     render();
-                    showToast(`Posted note "${title}"`);
-                    return;
                 }
             }
         } catch (err) {
             console.error('Failed to save announcement to server', err);
         }
     }
-
-    // Fallback local
-    if (!db.announcements) db.announcements = [];
-    db.announcements.unshift({
-        id: 'ann-' + Date.now(),
-        badge,
-        title,
-        content,
-        date: new Date().toISOString().split('T')[0]
-    });
-    saveLocalBackup();
-    addAnnForm.reset();
-    addAnnModal.classList.remove('open');
-    activeTab = 'announcements';
-    navTabAnnouncements.classList.add('active');
-    navTabResources.classList.remove('active');
-    navTabCampus.classList.remove('active');
-    render();
-    showToast(`Posted note "${title}"`);
 });
 
 // Background Polling (Every 10 seconds for real-time collaboration with colleagues)
