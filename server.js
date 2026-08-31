@@ -302,27 +302,32 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start Server
-const server = app.listen(PORT, () => {
-    console.log(`=======================================================`);
-    console.log(`🚀 Shared Academic Hub Server running on port ${PORT}`);
-    console.log(`   Local URL: http://localhost:${PORT}`);
-    if (process.env.MONGODB_URI) {
-        console.log(`   Database: Connected to Persistent Cloud Database`);
-    } else {
-        console.log(`   Database: Local/File Fallback (Set MONGODB_URI for cloud)`);
-    }
-    console.log(`=======================================================`);
-});
+// Export app for Vercel serverless deployment
+module.exports = app;
 
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.log(`\n=======================================================`);
-        console.log(`ℹ️ Port ${PORT} is already running in the background!`);
-        console.log(`👉 Simply open your browser at: http://localhost:${PORT}`);
-        console.log(`=======================================================\n`);
-        process.exit(0);
-    } else {
-        console.error('Server error:', err);
-    }
-});
+// Start Server (only when running locally, not on Vercel)
+if (process.env.NODE_ENV !== 'production') {
+    const server = app.listen(PORT, () => {
+        console.log(`=======================================================`);
+        console.log(`🚀 Shared Academic Hub Server running on port ${PORT}`);
+        console.log(`   Local URL: http://localhost:${PORT}`);
+        if (process.env.MONGODB_URI) {
+            console.log(`   Database: Connected to Persistent Cloud Database`);
+        } else {
+            console.log(`   Database: Local/File Fallback (Set MONGODB_URI for cloud)`);
+        }
+        console.log(`=======================================================`);
+    });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.log(`\n=======================================================`);
+            console.log(`ℹ️ Port ${PORT} is already running in the background!`);
+            console.log(`👉 Simply open your browser at: http://localhost:${PORT}`);
+            console.log(`=======================================================\n`);
+            process.exit(0);
+        } else {
+            console.error('Server error:', err);
+        }
+    });
+}
