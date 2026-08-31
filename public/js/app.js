@@ -814,42 +814,71 @@ addDocForm.addEventListener('submit', async (e) => {
 
     if (!type || !title) return;
 
-    const formData = new FormData();
-    formData.append('type', type);
-    formData.append('title', title);
-    if (note) formData.append('note', note);
-    if (fileInput.files.length > 0) {
-        formData.append('file', fileInput.files[0]);
-    } else if (url) {
-        formData.append('url', url);
+    // Helper: read file as a base64 data URL (works without server filesystem)
+    function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     }
 
-    // Optimistically update UI
-    const newDoc = { id: 'doc-' + Date.now(), type, title, url: url || '#', note: note || '', updatedAt: new Date().toISOString().split('T')[0] };
+    let finalUrl = url || '#';
+
+    // If a file was selected, embed it as a data URL so it can be opened directly
+    if (fileInput.files.length > 0) {
+        try {
+            finalUrl = await readFileAsDataURL(fileInput.files[0]);
+        } catch (err) {
+            console.error('Failed to read file:', err);
+            showToast('Could not read the selected file. Try using a Drive URL instead.');
+            return;
+        }
+    }
+
+    const newDoc = {
+        id: 'doc-' + Date.now(),
+        type,
+        title,
+        url: finalUrl,
+        note: note || '',
+        updatedAt: new Date().toISOString().split('T')[0]
+    };
+
     if (!db.campusDocs) db.campusDocs = [];
     db.campusDocs.unshift(newDoc);
     saveLocalBackup();
-    renderCampusView();
-    showToast(`Added document "${title}"!`);
+
     addDocForm.reset();
     addDocModal.classList.remove('open');
 
+    // Always switch to Campus tab so the user sees the added document
+    activeTab = 'campus';
+    navTabCampus.classList.add('active');
+    navTabResources.classList.remove('active');
+    navTabAnnouncements.classList.remove('active');
+    render();
+    showToast(`Added "${title}" to ${type === 'timetable' ? 'Timetable' : type === 'mess' ? 'Mess Menu' : type === 'exam' ? 'Exam Schedule' : 'Holiday Calendar'}!`);
+
+    // Also save to server (send URL, not binary file — Vercel serverless can't store files)
     if (isServerConnected) {
         try {
             const res = await fetch(`${API_BASE}/campus-docs`, {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, title, url: finalUrl, note })
             });
             if (res.ok) {
                 const data = await res.json();
                 if (data.success && data.campusDocs) {
                     db = mergeDatabase({ campusDocs: data.campusDocs }, db);
                     saveLocalBackup();
-                    renderCampusView();
+                    render();
                 }
             }
         } catch (err) {
-            console.error('Failed to add campus document on server', err);
+            console.error('Failed to save campus document on server:', err);
         }
     }
 });

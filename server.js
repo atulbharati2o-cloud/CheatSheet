@@ -223,15 +223,10 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 // 5. Add Campus Document (Timetable, Mess Menu, Exam Schedule, Holiday Calendar)
-app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
-    const { type, title, note } = req.body;
-    // url may come from body or file upload
-    let fileUrl = '';
-    if (req.file) {
-        fileUrl = `/uploads/${req.file.filename}`;
-    } else if (req.body.url) {
-        fileUrl = req.body.url;
-    }
+app.post('/api/campus-docs', async (req, res) => {
+    const { type, title, note, url } = req.body;
+    const fileUrl = url || '#';
+
     if (!type || !title) {
         return res.status(400).json({ success: false, message: 'Type and title are required.' });
     }
@@ -240,7 +235,7 @@ app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
         id: 'doc-' + Date.now(),
         type,
         title,
-        url: fileUrl || '#',
+        url: fileUrl,
         note: note || '',
         updatedAt: new Date().toISOString().split('T')[0]
     };
@@ -248,6 +243,7 @@ app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
     db.campusDocs.unshift(newDoc);
     await writeDB(db);
     res.json({ success: true, doc: newDoc, campusDocs: db.campusDocs });
+
 });
 
 // 6. Delete Campus Document
