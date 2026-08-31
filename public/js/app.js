@@ -852,62 +852,6 @@ addDocForm.addEventListener('submit', async (e) => {
             console.error('Failed to add campus document on server', err);
         }
     }
-});            console.error('Failed to save link to server', err);
-        }
-    }
-});
-
-// Submit Modal 2: Add Campus Document
-addDocForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const type = document.getElementById('doc-type').value;
-    const title = document.getElementById('doc-title').value.trim();
-    const url = document.getElementById('doc-url').value.trim();
-    const note = document.getElementById('doc-note').value.trim();
-
-    if (!type || !title) return;
-
-    const newDoc = {
-        id: 'doc-' + Date.now(),
-        type,
-        title,
-        url: url || '#',
-        note,
-        updatedAt: new Date().toISOString().split('T')[0]
-    };
-
-    if (!db.campusDocs) db.campusDocs = [];
-    db.campusDocs.unshift(newDoc);
-    saveLocalBackup();
-
-    addDocForm.reset();
-    addDocModal.classList.remove('open');
-    activeTab = 'campus';
-    navTabCampus.classList.add('active');
-    navTabResources.classList.remove('active');
-    navTabAnnouncements.classList.remove('active');
-    render();
-    showToast(`Added document "${title}"`);
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/campus-docs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, title, url, note })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.campusDocs) {
-                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
-                    saveLocalBackup();
-                    render();
-                }
-            }
-        } catch (err) {
-            console.error('Failed to save doc to server', err);
-        }
-    }
 });
 
 // Submit Modal 3: Add Announcement
