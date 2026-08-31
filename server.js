@@ -50,14 +50,13 @@ function uploadToCloudinary(file, folder = 'academic_hub') {
         const uploadStream = cloudinary.uploader.upload_stream(
             {
                 folder,
-                // Append .pdf extension so the Cloudinary URL ends with .pdf.
-                // path.parse().name strips the extension, causing downloads with no
-                // file type. With the extension the browser/Google Docs Viewer
-                // recognises the file as a PDF.
                 public_id: file.mimetype === 'application/pdf'
                     ? `${cleanName}-${Date.now()}.pdf`
                     : `${cleanName}-${Date.now()}`,
-                resource_type: file.mimetype === 'application/pdf' ? 'raw' : 'auto'
+                resource_type: 'auto',
+                // Force public delivery — without this Cloudinary marks files as
+                // "Blocked for delivery" causing 401 when the proxy tries to fetch.
+                access_mode: 'public'
             },
             (error, result) => {
                 if (error) return reject(error);
