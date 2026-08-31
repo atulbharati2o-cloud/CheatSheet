@@ -743,7 +743,40 @@ addAnnForm.addEventListener('submit', async (e) => {
     }
 });
 
+// Silent background poll — fetches latest data without disrupting the UI
+async function silentRefresh() {
+    try {
+        const response = await fetch(`${API_BASE}/data`);
+        if (!response.ok) return;
+        const res = await response.json();
+        if (!res.success || !res.data) return;
+
+        // Only re-render if something actually changed
+        const newSnapshot = JSON.stringify(res.data);
+        const oldSnapshot = JSON.stringify({ resources: db.resources, campusDocs: db.campusDocs, announcements: db.announcements });
+        if (newSnapshot !== oldSnapshot) {
+            db.resources = res.data.resources || [];
+            db.campusDocs = res.data.campusDocs || [];
+            db.announcements = res.data.announcements || [];
+            render();
+            showToast('🔄 Data updated by another user');
+        }
+    } catch (e) {
+        // Silent — don't show error toasts during background poll
+    }
+}
+
 // Initialize Application on Page Load
 document.addEventListener('DOMContentLoaded', () => {
     fetchServerData();
+
+    // Auto-refresh every 30 seconds to pick up changes from other users
+    setInterval(silentRefresh, 30000);
+
+    // Also refresh immediately when the user switches back to this tab
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            silentRefresh();
+        }
+    });
 });

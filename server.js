@@ -93,7 +93,11 @@ async function ensureDbConnection() {
         throw new Error('MONGODB_URI is not configured in .env');
     }
 
-    dbConnectionPromise = mongoose.connect(process.env.MONGODB_URI);
+    dbConnectionPromise = mongoose.connect(process.env.MONGODB_URI)
+        .catch(err => {
+            dbConnectionPromise = null; // Clear so next call can retry
+            throw err;
+        });
     await dbConnectionPromise;
 }
 
@@ -124,14 +128,18 @@ async function readDB() {
 // Pure MongoDB Helper: Write State
 async function writeDB(data) {
     await ensureDbConnection();
+    // Use explicit $set so Mongoose always replaces the mixed Array fields.
+    // Without $set, updates to untyped Array schema fields can be silently ignored.
     const updated = await HubDataModel.findOneAndUpdate(
         { hubId: 'default_hub' },
         {
-            resources: data.resources || [],
-            campusDocs: data.campusDocs || [],
-            announcements: data.announcements || []
+            $set: {
+                resources: data.resources || [],
+                campusDocs: data.campusDocs || [],
+                announcements: data.announcements || []
+            }
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true, strict: false }
     );
     return {
         resources: updated.resources || [],
