@@ -391,6 +391,31 @@ app.delete('/api/announcements/:id', async (req, res) => {
     }
 });
 
+// PDF Proxy: Fetches PDF from Cloudinary and serves it inline so the browser
+// PDF viewer opens it instead of downloading. Google Docs Viewer was unreliable
+// ("No preview available") because Cloudinary CDN blocks its fetcher.
+app.get('/api/view-pdf', async (req, res) => {
+    const { url } = req.query;
+    if (!url) return res.status(400).send('Missing url parameter');
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Cloudinary returned ${response.status}`);
+
+        const buffer = await response.arrayBuffer();
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'inline',
+            'Content-Length': buffer.byteLength,
+            'Cache-Control': 'public, max-age=86400'
+        });
+        res.send(Buffer.from(buffer));
+    } catch (err) {
+        console.error('GET /api/view-pdf error:', err.message);
+        res.status(500).send('Failed to load PDF: ' + err.message);
+    }
+});
+
 // Fallback Route for Single Page Application
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

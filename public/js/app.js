@@ -5,11 +5,10 @@
 const API_BASE = '/api';
 
 /**
- * Returns a Google Docs Viewer URL so PDFs open in the browser tab (not download).
- * Handles all cases:
- *  - URL ends with .pdf  (new uploads with extension fixed)
- *  - Cloudinary /raw/upload/ URLs (old uploads missing .pdf extension)
- *  - Cloudinary /image/upload/ URLs (uploads before resource_type fix)
+ * Routes PDF URLs through the local /api/view-pdf proxy which fetches the file
+ * from Cloudinary and serves it with Content-Disposition: inline so Chrome's
+ * native PDF viewer renders it — no downloads, no "No preview available".
+ * Handles all variants: .pdf extension, /raw/upload/, /image/upload/.
  */
 function getViewableUrl(url) {
     if (!url) return url;
@@ -20,7 +19,7 @@ function getViewableUrl(url) {
             || lower.includes('/image/upload/')
         ));
     if (isPdf) {
-        return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=false`;
+        return `/api/view-pdf?url=${encodeURIComponent(url)}`;
     }
     return url;
 }
