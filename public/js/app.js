@@ -5,16 +5,15 @@
 const API_BASE = '/api';
 
 /**
- * Fix Cloudinary PDF URL: Cloudinary stores PDFs under /image/upload/ when
- * resource_type is 'auto'. Browser PDF viewer cannot open these. We rewrite
- * the URL to /raw/upload/ so the browser gets the correct content-type.
- * Non-PDF URLs are returned unchanged.
+ * Returns a URL that opens the PDF in the browser (not as a download).
+ * Cloudinary raw/image URLs both trigger file downloads due to missing
+ * inline Content-Disposition headers. Google Docs Viewer renders the PDF
+ * directly in the browser tab — works for all Cloudinary PDF URLs.
  */
 function getViewableUrl(url) {
     if (!url) return url;
-    // If it's a Cloudinary URL serving a PDF under /image/upload/, fix it
-    if (url.includes('res.cloudinary.com') && url.toLowerCase().endsWith('.pdf')) {
-        return url.replace('/image/upload/', '/raw/upload/');
+    if (url.toLowerCase().endsWith('.pdf')) {
+        return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=false`;
     }
     return url;
 }
