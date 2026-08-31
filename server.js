@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 // Verify MongoDB Connection String
 if (!process.env.MONGODB_URI) {
-    console.error('❌ FATAL: MONGODB_URI is required in .env');
+    console.error('❌ MONGODB_URI is not set in .env');
 }
 
 // Check and configure Cloudinary
@@ -30,10 +30,10 @@ if (isCloudinaryConfigured) {
     });
     console.log(`✅ Cloudinary Storage: Configured for cloud "${process.env.CLOUDINARY_CLOUD_NAME}"`);
 } else {
-    console.warn('⚠️ Cloudinary: Cloud name not set in .env. File uploads to Cloudinary will require CLOUDINARY_CLOUD_NAME.');
+    console.warn('⚠️ Cloudinary: Cloud name not set in .env. (Set CLOUDINARY_CLOUD_NAME to enable uploads)');
 }
 
-// Multer memory storage (Streams directly to Cloudinary, no local disk storage)
+// Multer memory storage (Streams directly to Cloudinary, no disk writes)
 const storage = multer.memoryStorage();
 const upload = multer({
     storage,
@@ -44,7 +44,7 @@ const upload = multer({
 function uploadToCloudinary(file, folder = 'academic_hub') {
     return new Promise((resolve, reject) => {
         if (!isCloudinaryConfigured) {
-            return reject(new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in .env'));
+            return reject(new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME in .env'));
         }
         const cleanName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_');
         const uploadStream = cloudinary.uploader.upload_stream(
@@ -78,24 +78,33 @@ const HubDataSchema = new mongoose.Schema({
 
 const HubDataModel = mongoose.model('HubData', HubDataSchema);
 
-let isMongoConnected = false;
+let dbConnectionPromise = null;
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log('✅ Persistent Database: Connected to MongoDB Atlas successfully!');
-        isMongoConnected = true;
-    })
-    .catch(err => {
-        console.error('❌ MongoDB Connection Error:', err.message);
-        isMongoConnected = false;
-    });
+// Ensure database connection with automatic reconnection / wait
+async function ensureDbConnection() {
+    if (mongoose.connection.readyState === 1) return;
+
+    if (mongoose.connection.readyState === 2 && dbConnectionPromise) {
+        await dbConnectionPromise;
+        return;
+    }
+
+    if (!process.env.MONGODB_URI) {
+        throw new Error('MONGODB_URI is not configured in .env');
+    }
+
+    dbConnectionPromise = mongoose.connect(process.env.MONGODB_URI);
+    await dbConnectionPromise;
+}
+
+// Connect immediately on startup
+ensureDbConnection()
+    .then(() => console.log('✅ Persistent Database: Connected to MongoDB Atlas successfully!'))
+    .catch(err => console.error('❌ MongoDB Connection Error:', err.message));
 
 // Pure MongoDB Helper: Read State
 async function readDB() {
-    if (!isMongoConnected && mongoose.connection.readyState !== 1) {
-        throw new Error('Database is not connected. Please check MongoDB Atlas connection.');
-    }
+    await ensureDbConnection();
     let doc = await HubDataModel.findOne({ hubId: 'default_hub' });
     if (!doc) {
         doc = await HubDataModel.create({
@@ -114,9 +123,7 @@ async function readDB() {
 
 // Pure MongoDB Helper: Write State
 async function writeDB(data) {
-    if (!isMongoConnected && mongoose.connection.readyState !== 1) {
-        throw new Error('Database is not connected. Please check MongoDB Atlas connection.');
-    }
+    await ensureDbConnection();
     const updated = await HubDataModel.findOneAndUpdate(
         { hubId: 'default_hub' },
         {
