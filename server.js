@@ -4,8 +4,11 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const uploadDir = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir, { recursive: true }); }
+// Use /tmp for Vercel (read-only filesystem), fallback to public/uploads locally
+const uploadDir = process.env.NODE_ENV === 'production'
+    ? '/tmp/uploads'
+    : path.join(__dirname, 'public', 'uploads');
+try { if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir, { recursive: true }); } } catch(e) {}
 const upload = multer({ dest: uploadDir });
 const mongoose = require('mongoose');
 
