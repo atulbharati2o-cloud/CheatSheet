@@ -50,10 +50,13 @@ function uploadToCloudinary(file, folder = 'academic_hub') {
         const uploadStream = cloudinary.uploader.upload_stream(
             {
                 folder,
-                public_id: `${cleanName}-${Date.now()}`,
-                // Use 'raw' for PDFs so they are served under /raw/upload/ with correct
-                // content-type headers; 'auto' was classifying PDFs as images (/image/upload/)
-                // which prevents the browser PDF viewer from loading them.
+                // Append .pdf extension so the Cloudinary URL ends with .pdf.
+                // path.parse().name strips the extension, causing downloads with no
+                // file type. With the extension the browser/Google Docs Viewer
+                // recognises the file as a PDF.
+                public_id: file.mimetype === 'application/pdf'
+                    ? `${cleanName}-${Date.now()}.pdf`
+                    : `${cleanName}-${Date.now()}`,
                 resource_type: file.mimetype === 'application/pdf' ? 'raw' : 'auto'
             },
             (error, result) => {

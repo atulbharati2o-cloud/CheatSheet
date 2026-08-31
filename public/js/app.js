@@ -5,14 +5,21 @@
 const API_BASE = '/api';
 
 /**
- * Returns a URL that opens the PDF in the browser (not as a download).
- * Cloudinary raw/image URLs both trigger file downloads due to missing
- * inline Content-Disposition headers. Google Docs Viewer renders the PDF
- * directly in the browser tab — works for all Cloudinary PDF URLs.
+ * Returns a Google Docs Viewer URL so PDFs open in the browser tab (not download).
+ * Handles all cases:
+ *  - URL ends with .pdf  (new uploads with extension fixed)
+ *  - Cloudinary /raw/upload/ URLs (old uploads missing .pdf extension)
+ *  - Cloudinary /image/upload/ URLs (uploads before resource_type fix)
  */
 function getViewableUrl(url) {
     if (!url) return url;
-    if (url.toLowerCase().endsWith('.pdf')) {
+    const lower = url.toLowerCase();
+    const isPdf = lower.endsWith('.pdf')
+        || (lower.includes('res.cloudinary.com') && (
+            lower.includes('/raw/upload/')
+            || lower.includes('/image/upload/')
+        ));
+    if (isPdf) {
         return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=false`;
     }
     return url;
