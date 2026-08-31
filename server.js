@@ -51,7 +51,10 @@ function uploadToCloudinary(file, folder = 'academic_hub') {
             {
                 folder,
                 public_id: `${cleanName}-${Date.now()}`,
-                resource_type: 'auto'
+                // Use 'raw' for PDFs so they are served under /raw/upload/ with correct
+                // content-type headers; 'auto' was classifying PDFs as images (/image/upload/)
+                // which prevents the browser PDF viewer from loading them.
+                resource_type: file.mimetype === 'application/pdf' ? 'raw' : 'auto'
             },
             (error, result) => {
                 if (error) return reject(error);

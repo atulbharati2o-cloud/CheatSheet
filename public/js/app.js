@@ -4,6 +4,21 @@
 
 const API_BASE = '/api';
 
+/**
+ * Fix Cloudinary PDF URL: Cloudinary stores PDFs under /image/upload/ when
+ * resource_type is 'auto'. Browser PDF viewer cannot open these. We rewrite
+ * the URL to /raw/upload/ so the browser gets the correct content-type.
+ * Non-PDF URLs are returned unchanged.
+ */
+function getViewableUrl(url) {
+    if (!url) return url;
+    // If it's a Cloudinary URL serving a PDF under /image/upload/, fix it
+    if (url.includes('res.cloudinary.com') && url.toLowerCase().endsWith('.pdf')) {
+        return url.replace('/image/upload/', '/raw/upload/');
+    }
+    return url;
+}
+
 // Live App State (Purely fetched and synced with MongoDB Atlas)
 let db = {
     resources: [],
@@ -407,10 +422,12 @@ function renderCampusView() {
             return;
         }
 
-        container.innerHTML = items.map(doc => `
+        container.innerHTML = items.map(doc => {
+            const viewUrl = getViewableUrl(doc.url);
+            return `
             <div class="doc-card">
                 <div class="doc-title-row">
-                    <a href="${doc.url}" target="_blank" rel="noreferrer">${doc.title}</a>
+                    <a href="${viewUrl}" target="_blank" rel="noreferrer">${doc.title}</a>
                     <div class="link-actions">
                         <button class="action-icon-btn" onclick="copyLink('${doc.url}')" title="Copy Document Link">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -423,10 +440,11 @@ function renderCampusView() {
                 ${doc.note ? `<div class="doc-note-text">💡 ${doc.note}</div>` : ''}
                 <div class="doc-footer">
                     <span>Updated ${doc.updatedAt || 'recently'}</span>
-                    <a href="${doc.url}" target="_blank" style="color: var(--accent-cyan); font-weight: 600; text-decoration: none;">View File &rarr;</a>
+                    <a href="${viewUrl}" target="_blank" style="color: var(--accent-cyan); font-weight: 600; text-decoration: none;">View File &rarr;</a>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     };
 
     renderCategoryDocs('timetable', timetableList);
