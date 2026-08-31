@@ -59,3 +59,5 @@ The application will be available at: **http://localhost:3000**
 - `DELETE /api/campus-docs/:id` - Delete a campus schedule or document from MongoDB
 - `POST /api/announcements` - Post a special note/announcement in MongoDB
 - `DELETE /api/announcements/:id` - Delete a special note/announcement from MongoDB
+
+
