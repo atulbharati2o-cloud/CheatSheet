@@ -5,10 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Academic & Campus Hub | Collaborative Student Vault</title>
-    <meta name="description" content="Collaborative hub for course drives, lecture notes, timetables, mess menus, exam schedules, and holiday calendars.">
+    <meta name="description" content="Collaborative academic hub for course drives, lecture notes, timetables, mess menus, exam schedules, and holiday calendars.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -18,54 +18,59 @@
         <header class="topbar">
             <div class="brand">
                 <span class="brand-mark">A</span>
-                <div>
-
-                    <h1>Campus Resource Vault</h1>
+                <div class="brand-title-wrap">
+                    <h1>
+                        Campus Vault
+                        <span class="status-badge">
+                            <span class="pulse-dot"></span>
+                            MongoDB Live
+                        </span>
+                    </h1>
                 </div>
             </div>
 
             <div class="header-actions">
                 <div class="search-box">
-                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
                     <input type="text" id="search-input" placeholder="Search resources, timetables..." aria-label="Search resources">
-                    
+                    <span class="search-kbd">⌘K</span>
                 </div>
                 
                 <div class="add-buttons-group">
                     <button id="open-add-modal" class="btn primary-btn" title="Add course drive or subject link">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
-                        + Add Link
+                        Add Resource
                     </button>
                     <button id="open-add-doc-modal" class="btn secondary-btn" title="Add Timetable, Mess Menu, or Exam Datesheet">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                             <line x1="16" y1="2" x2="16" y2="6"></line>
                             <line x1="8" y1="2" x2="8" y2="6"></line>
                             <line x1="3" y1="10" x2="21" y2="10"></line>
                         </svg>
-                        + Campus Doc
+                        Upload Doc
                     </button>
                 </div>
             </div>
         </header>
 
-        <!-- Primary Navigation Tabs -->
+        <!-- Primary Navigation Tabs (shadcn TabsList) -->
         <nav class="main-nav-tabs" aria-label="Main Navigation">
             <button id="nav-tab-resources" class="nav-tab active">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                 </svg>
                 Resource Vault
             </button>
             <button id="nav-tab-campus" class="nav-tab">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                     <line x1="16" y1="2" x2="16" y2="6"></line>
                     <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -74,26 +79,41 @@
                 Campus & Schedules
             </button>
             <button id="nav-tab-announcements" class="nav-tab">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
-                Special Notes & Notice Board
+                Notice Board
             </button>
         </nav>
 
         <main class="dashboard">
             <!-- VIEW 1: Resource Vault -->
             <div id="view-resources" class="view-panel active">
-                <!-- Hero Banner -->
+                <!-- Hero Banner with Live Counters -->
                 <section class="hero">
-                    <div>
-                        <span class="pill">Collaborative • Semester 5 CSE Hub</span>
-                        <h2>Academic Journey Link Vault</h2>
-                        
+                    <div class="hero-left">
+                        <span class="pill">⚡ Collaborative • CSE Semester Hub</span>
+                        <h2>Academic Resource Vault</h2>
+                        <p class="hero-desc">
+                            Shared access to course drives, lecture notes, textbook PDFs, lab codes, and reference playlists.
+                        </p>
                     </div>
 
-                    
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span id="stat-subjects">0</span>
+                            <p>Subjects</p>
+                        </div>
+                        <div class="stat-item">
+                            <span id="stat-links">0</span>
+                            <p>Links & Files</p>
+                        </div>
+                        <div class="stat-item">
+                            <span id="stat-pinned">0</span>
+                            <p>Pinned</p>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Controls: Category Pills & View Switch -->
@@ -102,7 +122,7 @@
 
                     <div class="view-options">
                         <button id="view-grid-btn" class="view-btn active" title="Grid Layout">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="3" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="14" width="7" height="7"></rect>
@@ -111,7 +131,7 @@
                             Grid
                         </button>
                         <button id="view-list-btn" class="view-btn" title="List Layout">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="8" y1="6" x2="21" y2="6"></line>
                                 <line x1="8" y1="12" x2="21" y2="12"></line>
                                 <line x1="8" y1="18" x2="21" y2="18"></line>
@@ -127,10 +147,10 @@
                 <!-- Pinned Favorites Section -->
                 <section id="pinned-section" class="pinned-section" style="display: none;">
                     <h3 class="section-title">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                         </svg>
-                        Pinned Quick Links
+                        Quick Access & Pinned
                     </h3>
                     <div id="pinned-grid" class="pinned-grid"></div>
                 </section>
@@ -146,23 +166,23 @@
                 <div class="campus-header-bar">
                     <div>
                         <h2>Campus Documents & Schedules</h2>
-                        <p style="color: var(--text-muted); font-size: 0.9rem;">
-                            Direct access to Class Timetable, Hostel Mess Menu, Exam Datesheet, and University Academic Calendar.
+                        <p style="color: var(--text-muted); font-size: 0.88rem;">
+                            Direct access to Class Timetable, Hostel Mess Menu, Exam Datesheet, and University Calendar.
                         </p>
                     </div>
                     <button id="open-add-doc-modal-2" class="btn primary-btn">
-                        + Add Schedule / PDF Document
+                        + Add Schedule / PDF
                     </button>
                 </div>
 
                 <div class="campus-sections-grid">
                     <!-- Timetable Section -->
                     <div class="campus-category-card">
-                        <div class="campus-card-header timetable-theme">
+                        <div class="campus-card-header">
                             <div class="campus-header-icon">🕒</div>
                             <div>
                                 <h3>Class Timetable</h3>
-                                <p>Weekly lecture schedule & room numbers</p>
+                                <p>Weekly lectures & classroom schedule</p>
                             </div>
                         </div>
                         <div id="timetable-list" class="doc-list"></div>
@@ -170,11 +190,11 @@
 
                     <!-- Mess Menu Section -->
                     <div class="campus-category-card">
-                        <div class="campus-card-header mess-theme">
+                        <div class="campus-card-header">
                             <div class="campus-header-icon">🍱</div>
                             <div>
                                 <h3>Mess Menu</h3>
-                                <p>Breakfast, lunch, snacks & dinner menu</p>
+                                <p>Hostel breakfast, lunch & dinner menu</p>
                             </div>
                         </div>
                         <div id="mess-list" class="doc-list"></div>
@@ -182,11 +202,11 @@
 
                     <!-- Exam Schedule Section -->
                     <div class="campus-category-card">
-                        <div class="campus-card-header exam-theme">
+                        <div class="campus-card-header">
                             <div class="campus-header-icon">📝</div>
                             <div>
-                                <h3>Exam Schedule & Datesheet</h3>
-                                <p>Mid-term, end-term & practical exams</p>
+                                <h3>Exam Datesheet</h3>
+                                <p>Mid-term, end-term & lab schedules</p>
                             </div>
                         </div>
                         <div id="exam-list" class="doc-list"></div>
@@ -194,11 +214,11 @@
 
                     <!-- Holiday & Academic Calendar Section -->
                     <div class="campus-category-card">
-                        <div class="campus-card-header holiday-theme">
+                        <div class="campus-card-header">
                             <div class="campus-header-icon">🗓️</div>
                             <div>
-                                <h3>Holiday & Academic Calendar</h3>
-                                <p>Official university holidays & breaks</p>
+                                <h3>Academic Calendar</h3>
+                                <p>Gazetted holidays & semester schedule</p>
                             </div>
                         </div>
                         <div id="holiday-list" class="doc-list"></div>
@@ -210,13 +230,13 @@
             <div id="view-announcements" class="view-panel" style="display: none;">
                 <div class="campus-header-bar">
                     <div>
-                        <h2>Notice Board & Special Class Notes</h2>
-                        <p style="color: var(--text-muted); font-size: 0.9rem;">
-                            Broadcast important reminders, assignment submission notes, and exam tips to all colleagues.
+                        <h2>Notice Board & Class Updates</h2>
+                        <p style="color: var(--text-muted); font-size: 0.88rem;">
+                            Important reminders, assignment deadlines, and exam notifications.
                         </p>
                     </div>
                     <button id="open-add-ann-modal" class="btn primary-btn">
-                        + Post Special Note
+                        + Post Notice
                     </button>
                 </div>
 
@@ -225,22 +245,22 @@
         </main>
     </div>
 
-    <!-- MODAL 1: Add Resource Link -->
+    <!-- MODAL 1: Add Resource Link / File -->
     <div id="add-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Add Academic Resource Link</h3>
+                <h3>Add Academic Resource</h3>
                 <button id="close-add-modal" class="icon-btn" aria-label="Close modal">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                 </button>
             </div>
-            <form id="add-link-form">
+            <form id="add-link-form" enctype="multipart/form-data">
                 <div class="form-group">
-                    <label for="link-subject">Subject / Course Title</label>
-                    <input type="text" id="link-subject" class="form-control" placeholder="e.g. Computer Networking, Operating System" required list="subject-suggestions">
+                    <label for="link-subject">Subject / Course Name</label>
+                    <input type="text" id="link-subject" class="form-control" placeholder="e.g. Computer Networks, Operating Systems" required list="subject-suggestions">
                     <datalist id="subject-suggestions">
                         <option value="Main University Drive">
                         <option value="Computer Networking">
@@ -261,32 +281,37 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="link-label">Link Label / Title</label>
-                    <input type="text" id="link-label" class="form-control" placeholder="e.g. CN Lecture Notes Drive, Syllabus PDF" required>
+                    <label for="link-label">Resource Title</label>
+                    <input type="text" id="link-label" class="form-control" placeholder="e.g. Lecture Notes PPT, Unit 1 PYQ Solutions" required>
                 </div>
                 <div class="form-group">
-                    <label for="link-url">URL / Drive Link</label>
-                    <input type="url" id="link-url" class="form-control" placeholder="https://drive.google.com/..." required>
+                    <label for="link-url">Option A — URL / Drive Link</label>
+                    <input type="url" id="link-url" class="form-control" placeholder="https://drive.google.com/...">
+                </div>
+                <div class="form-group" style="text-align:center; color: var(--text-dim); font-size: 0.75rem; margin: -2px 0;">— OR —</div>
+                <div class="form-group">
+                    <label for="link-file">Option B — Upload File (Cloudinary CDN)</label>
+                    <input type="file" id="link-file" class="form-control" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.zip">
                 </div>
                 <div class="form-group">
                     <label for="link-note">Special Note / Description (Optional)</label>
-                    <textarea id="link-note" class="form-control" rows="2" placeholder="e.g. Contains Unit 1-4 PYQ solutions, updated by Rahul"></textarea>
+                    <textarea id="link-note" class="form-control" rows="2" placeholder="e.g. Verified notes by Rahul, Unit 1 to 4 included"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" id="cancel-add-modal" class="btn secondary-btn">Cancel</button>
-                    <button type="submit" class="btn primary-btn">Save Link for Everyone</button>
+                    <button type="submit" id="save-link-btn" class="btn primary-btn">Save to Vault</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- MODAL 2: Add Campus Document (Timetable / Mess Menu / Exam / Holiday) -->
+    <!-- MODAL 2: Add Campus Document (Timetable / Mess / Exam / Holiday) -->
     <div id="add-doc-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Add Campus Document / Schedule</h3>
+                <h3>Add Schedule / Campus Document</h3>
                 <button id="close-add-doc-modal" class="icon-btn" aria-label="Close modal">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
@@ -304,24 +329,24 @@
                 </div>
                 <div class="form-group">
                     <label for="doc-title">Document Title</label>
-                    <input type="text" id="doc-title" class="form-control" placeholder="e.g. Mid-Term Datesheet Oct 2026" required>
+                    <input type="text" id="doc-title" class="form-control" placeholder="e.g. 5th Sem CSE Fall 2026 Timetable" required>
                 </div>
                 <div class="form-group">
-                    <label for="doc-url">Option 1 — Drive / Web Link</label>
+                    <label for="doc-url">Option A — URL / Drive Link</label>
                     <input type="url" id="doc-url" class="form-control" placeholder="https://drive.google.com/...">
                 </div>
-                <div class="form-group" style="text-align:center; color: var(--text-dim); font-size: 0.8rem; margin: -6px 0;">— OR —</div>
+                <div class="form-group" style="text-align:center; color: var(--text-dim); font-size: 0.75rem; margin: -2px 0;">— OR —</div>
                 <div class="form-group">
-                    <label for="doc-file">Option 2 — Upload a PDF File</label>
-                    <input type="file" id="doc-file" class="form-control" accept="application/pdf">
+                    <label for="doc-file">Option B — Upload File (Cloudinary CDN)</label>
+                    <input type="file" id="doc-file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.doc">
                 </div>
                 <div class="form-group">
                     <label for="doc-note">Special Note / Key Details (Optional)</label>
-                    <input type="text" id="doc-note" class="form-control" placeholder="e.g. Exams timing 10:00 AM - 1:00 PM in Lab 2">
+                    <input type="text" id="doc-note" class="form-control" placeholder="e.g. Lab timings 2:00 PM - 4:00 PM in Block C">
                 </div>
                 <div class="modal-actions">
                     <button type="button" id="cancel-add-doc-modal" class="btn secondary-btn">Cancel</button>
-                    <button type="submit" class="btn primary-btn">Add Document</button>
+                    <button type="submit" id="save-doc-btn" class="btn primary-btn">Upload Document</button>
                 </div>
             </form>
         </div>
@@ -331,9 +356,9 @@
     <div id="add-ann-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Post Special Note / Announcement</h3>
+                <h3>Post Notice Board Note</h3>
                 <button id="close-add-ann-modal" class="icon-btn" aria-label="Close modal">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
@@ -341,7 +366,7 @@
             </div>
             <form id="add-ann-form">
                 <div class="form-group">
-                    <label for="ann-badge">Tag / Badge</label>
+                    <label for="ann-badge">Tag Badge</label>
                     <select id="ann-badge" class="form-control" required>
                         <option value="Important">🔥 Important</option>
                         <option value="Exam">📝 Exam Alert</option>
@@ -350,16 +375,16 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="ann-title">Note Title</label>
-                    <input type="text" id="ann-title" class="form-control" placeholder="e.g. OS Assignment Submission Extended" required>
+                    <label for="ann-title">Notice Title</label>
+                    <input type="text" id="ann-title" class="form-control" placeholder="e.g. OS Assignment Deadline Extended" required>
                 </div>
                 <div class="form-group">
-                    <label for="ann-content">Note Content</label>
-                    <textarea id="ann-content" class="form-control" rows="3" placeholder="Write full note instructions for your classmates..." required></textarea>
+                    <label for="ann-content">Notice Content</label>
+                    <textarea id="ann-content" class="form-control" rows="3" placeholder="Write full details for your classmates..." required></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" id="cancel-add-ann-modal" class="btn secondary-btn">Cancel</button>
-                    <button type="submit" class="btn primary-btn">Post Note</button>
+                    <button type="submit" class="btn primary-btn">Broadcast Notice</button>
                 </div>
             </form>
         </div>

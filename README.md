@@ -1,6 +1,7 @@
 # Shared Academic & Campus Hub 🎓
 
 > Collaborative Academic Resource Vault & Campus Schedules Hub for Students and Colleagues.
+> Powered purely by **MongoDB Atlas** (persistent cloud database) and **Cloudinary** (cloud CDN asset storage).
 
 ---
 
@@ -10,22 +11,14 @@
 CheatSheet/
 ├── public/                            # Client-side static assets
 │   ├── index.html                     # Main application HTML structure
-│   ├── css/                           # Stylesheets
-│   │   ├── style.css                  # Custom CSS styles (Theme, Grid, Modals, Responsive UI)
-│   │   └── prism.css                  # Vendor syntax highlighting stylesheet
-│   ├── js/                            # Client-side logic & scripts
-│   │   ├── app.js                     # Main SPA frontend application logic
-│   │   └── prism.js                   # Vendor syntax highlighting script
-│   └── assets/                        # Static media assets
-│       └── images/
-│           ├── copy.svg               # Copy button icon
-│           └── copy.png               # Copy button PNG asset
-├── data/                              # Database directory
-│   └── database.json                  # JSON file persistence storage
-├── server.js                          # Node.js + Express backend server
+│   ├── css/                           # Stylesheets (Theme, Grid, Modals, Responsive UI)
+│   ├── js/                            # Client-side logic & scripts (Pure MongoDB/Cloudinary API sync)
+│   └── assets/                        # Static icons & media
+├── server.js                          # Node.js + Express backend (MongoDB + Cloudinary integration)
 ├── package.json                       # NPM package metadata and scripts
-├── package-lock.json                  # Dependency lock file
-├── .gitignore                         # Git ignore configuration
+├── .env                               # MongoDB Atlas & Cloudinary environment variables
+├── .env.example                       # Environment template
+├── vercel.json                        # Serverless deployment configuration
 └── README.md                          # Project documentation
 ```
 
@@ -34,7 +27,9 @@ CheatSheet/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v16+ recommended)
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- MongoDB Atlas cluster URI
+- Cloudinary credentials (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`)
 
 ### Installation
 ```bash
@@ -43,12 +38,7 @@ npm install
 
 ### Running the Server
 
-#### Development Mode (Auto-reload on changes)
-```bash
-npm run dev
-```
-
-#### Production Mode
+#### Start Production / Local Server
 ```bash
 npm start
 ```
@@ -59,11 +49,13 @@ The application will be available at: **http://localhost:3000**
 
 ## 🛠️ API Reference
 
-- `GET /api/data` - Retrieve full state (resources, campusDocs, announcements)
-- `POST /api/resources` - Add a new course/resource link
-- `PATCH /api/resources/:id/pin` - Toggle pin status on a resource link
-- `DELETE /api/resources/:id` - Delete a resource link
-- `POST /api/campus-docs` - Add a campus schedule or document
-- `DELETE /api/campus-docs/:id` - Delete a campus schedule or document
-- `POST /api/announcements` - Post a special note/announcement
-- `DELETE /api/announcements/:id` - Delete a special note/announcement
+- `GET /api/status` - Live MongoDB & Cloudinary connection health check
+- `GET /api/data` - Retrieve live hub state directly from MongoDB Atlas
+- `POST /api/upload` - Direct file upload to Cloudinary CDN
+- `POST /api/resources` - Add a new course/resource link or file (MongoDB + Cloudinary)
+- `PATCH /api/resources/:id/pin` - Toggle pin status in MongoDB
+- `DELETE /api/resources/:id` - Delete a resource link from MongoDB
+- `POST /api/campus-docs` - Add a campus schedule or document (MongoDB + Cloudinary)
+- `DELETE /api/campus-docs/:id` - Delete a campus schedule or document from MongoDB
+- `POST /api/announcements` - Post a special note/announcement in MongoDB
+- `DELETE /api/announcements/:id` - Delete a special note/announcement from MongoDB

@@ -1,28 +1,74 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-// Use /tmp for Vercel (read-only filesystem), fallback to public/uploads locally
-const uploadDir = process.env.NODE_ENV === 'production'
-    ? '/tmp/uploads'
-    : path.join(__dirname, 'public', 'uploads');
-try { if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir, { recursive: true }); } } catch(e) {}
-const upload = multer({ dest: uploadDir });
 const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_FILE = path.join(__dirname, 'data', 'database.json');
-const TMP_DB_FILE = path.join('/tmp', 'database.json');
+
+// Verify MongoDB Connection String
+if (!process.env.MONGODB_URI) {
+    console.error('❌ FATAL: MONGODB_URI is required in .env');
+}
+
+// Check and configure Cloudinary
+const isCloudinaryConfigured = Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name_here' &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+);
+
+if (isCloudinaryConfigured) {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+    console.log(`✅ Cloudinary Storage: Configured for cloud "${process.env.CLOUDINARY_CLOUD_NAME}"`);
+} else {
+    console.warn('⚠️ Cloudinary: Cloud name not set in .env. File uploads to Cloudinary will require CLOUDINARY_CLOUD_NAME.');
+}
+
+// Multer memory storage (Streams directly to Cloudinary, no local disk storage)
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage,
+    limits: { fileSize: 35 * 1024 * 1024 } // 35MB max file size
+});
+
+// Stream upload directly to Cloudinary
+function uploadToCloudinary(file, folder = 'academic_hub') {
+    return new Promise((resolve, reject) => {
+        if (!isCloudinaryConfigured) {
+            return reject(new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in .env'));
+        }
+        const cleanName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const uploadStream = cloudinary.uploader.upload_stream(
+            {
+                folder,
+                public_id: `${cleanName}-${Date.now()}`,
+                resource_type: 'auto'
+            },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result.secure_url);
+            }
+        );
+        uploadStream.end(file.buffer);
+    });
+}
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MongoDB Schema for Academic Hub Data
+// MongoDB Schema for Academic Hub
 const HubDataSchema = new mongoose.Schema({
     hubId: { type: String, default: 'default_hub', unique: true },
     resources: { type: Array, default: [] },
@@ -34,266 +80,294 @@ const HubDataModel = mongoose.model('HubData', HubDataSchema);
 
 let isMongoConnected = false;
 
-// Connect to MongoDB if MONGODB_URI is provided
-if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI)
-        .then(() => {
-            console.log('✅ Persistent Cloud Database: Connected to MongoDB Atlas successfully!');
-            isMongoConnected = true;
-        })
-        .catch(err => {
-            console.error('⚠️ MongoDB connection error, falling back to local file/memory storage:', err.message);
-            isMongoConnected = false;
-        });
-}
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+        console.log('✅ Persistent Database: Connected to MongoDB Atlas successfully!');
+        isMongoConnected = true;
+    })
+    .catch(err => {
+        console.error('❌ MongoDB Connection Error:', err.message);
+        isMongoConnected = false;
+    });
 
-let memoryCache = null;
-
-function readLocalJSON() {
-    if (memoryCache) {
-        return memoryCache;
-    }
-    try {
-        if (fs.existsSync(TMP_DB_FILE)) {
-            const raw = fs.readFileSync(TMP_DB_FILE, 'utf8');
-            memoryCache = JSON.parse(raw);
-            return memoryCache;
-        }
-        if (fs.existsSync(DB_FILE)) {
-            const raw = fs.readFileSync(DB_FILE, 'utf8');
-            memoryCache = JSON.parse(raw);
-            return memoryCache;
-        }
-    } catch (err) {
-        console.error('Error reading local database file:', err);
-    }
-    memoryCache = { resources: [], campusDocs: [], announcements: [] };
-    return memoryCache;
-}
-
-function writeLocalJSON(data) {
-    memoryCache = data;
-    try {
-        const dir = path.dirname(DB_FILE);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-        return true;
-    } catch (err) {
-        try {
-            const tmpDir = path.dirname(TMP_DB_FILE);
-            if (!fs.existsSync(tmpDir)) {
-                fs.mkdirSync(tmpDir, { recursive: true });
-            }
-            fs.writeFileSync(TMP_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-            return true;
-        } catch (tmpErr) {
-            console.warn('File write fallback failed (read-only filesystem):', tmpErr.message);
-        }
-        return false;
-    }
-}
-
-// Read DB helper (MongoDB if connected, otherwise local JSON)
+// Pure MongoDB Helper: Read State
 async function readDB() {
-    if (isMongoConnected) {
-        try {
-            let doc = await HubDataModel.findOne({ hubId: 'default_hub' });
-            if (!doc) {
-                const initial = readLocalJSON();
-                doc = await HubDataModel.create({
-                    hubId: 'default_hub',
-                    resources: initial.resources || [],
-                    campusDocs: initial.campusDocs || [],
-                    announcements: initial.announcements || []
-                });
-            }
-            return {
-                resources: doc.resources || [],
-                campusDocs: doc.campusDocs || [],
-                announcements: doc.announcements || []
-            };
-        } catch (err) {
-            console.error('Error reading from MongoDB, using local fallback:', err.message);
-        }
+    if (!isMongoConnected && mongoose.connection.readyState !== 1) {
+        throw new Error('Database is not connected. Please check MongoDB Atlas connection.');
     }
-    return readLocalJSON();
+    let doc = await HubDataModel.findOne({ hubId: 'default_hub' });
+    if (!doc) {
+        doc = await HubDataModel.create({
+            hubId: 'default_hub',
+            resources: [],
+            campusDocs: [],
+            announcements: []
+        });
+    }
+    return {
+        resources: doc.resources || [],
+        campusDocs: doc.campusDocs || [],
+        announcements: doc.announcements || []
+    };
 }
 
-// Write DB helper
+// Pure MongoDB Helper: Write State
 async function writeDB(data) {
-    if (isMongoConnected) {
-        try {
-            await HubDataModel.findOneAndUpdate(
-                { hubId: 'default_hub' },
-                {
-                    resources: data.resources,
-                    campusDocs: data.campusDocs,
-                    announcements: data.announcements
-                },
-                { upsert: true, new: true }
-            );
-            return true;
-        } catch (err) {
-            console.error('Error writing to MongoDB:', err.message);
-        }
+    if (!isMongoConnected && mongoose.connection.readyState !== 1) {
+        throw new Error('Database is not connected. Please check MongoDB Atlas connection.');
     }
-    return writeLocalJSON(data);
+    const updated = await HubDataModel.findOneAndUpdate(
+        { hubId: 'default_hub' },
+        {
+            resources: data.resources || [],
+            campusDocs: data.campusDocs || [],
+            announcements: data.announcements || []
+        },
+        { upsert: true, new: true }
+    );
+    return {
+        resources: updated.resources || [],
+        campusDocs: updated.campusDocs || [],
+        announcements: updated.announcements || []
+    };
 }
 
 // Routes
-// 1. Get full database state
+
+// 0. Live Status Route
+app.get('/api/status', (req, res) => {
+    res.json({
+        success: true,
+        mongoConnected: mongoose.connection.readyState === 1,
+        cloudinaryConfigured: isCloudinaryConfigured,
+        cloudName: isCloudinaryConfigured ? process.env.CLOUDINARY_CLOUD_NAME : null
+    });
+});
+
+// 1. Get entire database state directly from MongoDB
 app.get('/api/data', async (req, res) => {
-    const data = await readDB();
-    res.json({ success: true, data });
+    try {
+        const data = await readDB();
+        res.json({ success: true, data });
+    } catch (err) {
+        console.error('GET /api/data error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
-// 2. Add or append a resource link
-app.post('/api/resources', async (req, res) => {
-    const { category, title, label, href, note } = req.body;
-
-    if (!title || !label || !href) {
-        return res.status(400).json({ success: false, message: 'Title, label, and href are required.' });
-    }
-
-    const db = await readDB();
-    let group = db.resources.find(g => g.title.toLowerCase() === title.toLowerCase());
-
-    const newLink = {
-        id: 'lnk-' + Date.now(),
-        label,
-        href,
-        note: note || '',
-        pinned: false
-    };
-
-    if (group) {
-        group.links.push(newLink);
-    } else {
-        db.resources.push({
-            category: category || 'Core Subject',
-            title,
-            links: [newLink]
+// 2. Direct file upload to Cloudinary
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file provided' });
+        }
+        const fileUrl = await uploadToCloudinary(req.file, 'academic_hub/uploads');
+        res.json({
+            success: true,
+            url: fileUrl,
+            originalname: req.file.originalname,
+            size: req.file.size
         });
+    } catch (err) {
+        console.error('POST /api/upload error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-
-    await writeDB(db);
-    res.json({ success: true, link: newLink, resources: db.resources });
 });
 
-// 3. Toggle pin status on a resource link
-app.patch('/api/resources/:id/pin', async (req, res) => {
-    const { id } = req.params;
-    const db = await readDB();
-    let found = false;
-    let pinnedState = false;
+// 3. Add Resource Link / File to MongoDB
+app.post('/api/resources', upload.single('file'), async (req, res) => {
+    try {
+        let { category, title, label, href, note } = req.body;
 
-    db.resources.forEach(group => {
-        group.links.forEach(link => {
-            if (link.id === id) {
-                link.pinned = !link.pinned;
-                pinnedState = link.pinned;
-                found = true;
+        if (req.file) {
+            href = await uploadToCloudinary(req.file, 'academic_hub/resources');
+            if (!label) {
+                label = req.file.originalname;
             }
+        }
+
+        if (!title || !label || !href) {
+            return res.status(400).json({ success: false, message: 'Title, label, and a valid URL or file upload are required.' });
+        }
+
+        const db = await readDB();
+        let group = db.resources.find(g => g.title && g.title.toLowerCase() === title.toLowerCase());
+
+        const newLink = {
+            id: 'lnk-' + Date.now(),
+            label,
+            href,
+            note: note || '',
+            pinned: false
+        };
+
+        if (group) {
+            group.links.push(newLink);
+        } else {
+            db.resources.push({
+                category: category || 'Core Subject',
+                title,
+                links: [newLink]
+            });
+        }
+
+        const updated = await writeDB(db);
+        res.json({ success: true, link: newLink, resources: updated.resources });
+    } catch (err) {
+        console.error('POST /api/resources error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// 4. Toggle Pin status directly in MongoDB
+app.patch('/api/resources/:id/pin', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const db = await readDB();
+        let found = false;
+        let pinnedState = false;
+
+        db.resources.forEach(group => {
+            (group.links || []).forEach(link => {
+                if (link.id === id) {
+                    link.pinned = !link.pinned;
+                    pinnedState = link.pinned;
+                    found = true;
+                }
+            });
         });
-    });
 
-    if (!found) {
-        return res.status(404).json({ success: false, message: 'Link not found' });
+        if (!found) {
+            return res.status(404).json({ success: false, message: 'Resource link not found' });
+        }
+
+        const updated = await writeDB(db);
+        res.json({ success: true, id, pinned: pinnedState, resources: updated.resources });
+    } catch (err) {
+        console.error('PATCH /api/resources/:id/pin error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-
-    await writeDB(db);
-    res.json({ success: true, id, pinned: pinnedState, resources: db.resources });
 });
 
-// 4. Delete resource link
+// 5. Delete Resource Link directly from MongoDB
 app.delete('/api/resources/:id', async (req, res) => {
-    const { id } = req.params;
-    const db = await readDB();
+    try {
+        const { id } = req.params;
+        const db = await readDB();
 
-    db.resources.forEach(group => {
-        group.links = group.links.filter(l => l.id !== id);
-    });
+        db.resources.forEach(group => {
+            group.links = (group.links || []).filter(l => l.id !== id);
+        });
 
-    db.resources = db.resources.filter(g => g.links.length > 0);
+        db.resources = db.resources.filter(g => g.links && g.links.length > 0);
 
-    await writeDB(db);
-    res.json({ success: true, resources: db.resources });
-});
-
-// 5. Add Campus Document (Timetable, Mess Menu, Exam Schedule, Holiday Calendar)
-app.post('/api/campus-docs', async (req, res) => {
-    const { type, title, note, url } = req.body;
-    const fileUrl = url || '#';
-
-    if (!type || !title) {
-        return res.status(400).json({ success: false, message: 'Type and title are required.' });
+        const updated = await writeDB(db);
+        res.json({ success: true, resources: updated.resources });
+    } catch (err) {
+        console.error('DELETE /api/resources/:id error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-    const db = await readDB();
-    const newDoc = {
-        id: 'doc-' + Date.now(),
-        type,
-        title,
-        url: fileUrl,
-        note: note || '',
-        updatedAt: new Date().toISOString().split('T')[0]
-    };
-    if (!db.campusDocs) db.campusDocs = [];
-    db.campusDocs.unshift(newDoc);
-    await writeDB(db);
-    res.json({ success: true, doc: newDoc, campusDocs: db.campusDocs });
-
 });
 
-// 6. Delete Campus Document
+// 6. Add Campus Document (Timetable, Mess Menu, Exam Schedule, Holiday) to MongoDB + Cloudinary
+app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
+    try {
+        const { type, title, note, url } = req.body;
+        let fileUrl = url || '';
+
+        if (req.file) {
+            fileUrl = await uploadToCloudinary(req.file, 'academic_hub/campus_docs');
+        }
+
+        if (!type || !title || !fileUrl) {
+            return res.status(400).json({ success: false, message: 'Type, title, and a valid URL or file upload are required.' });
+        }
+
+        const db = await readDB();
+        const newDoc = {
+            id: 'doc-' + Date.now(),
+            type,
+            title,
+            url: fileUrl,
+            note: note || '',
+            updatedAt: new Date().toISOString().split('T')[0]
+        };
+
+        if (!db.campusDocs) db.campusDocs = [];
+        db.campusDocs.unshift(newDoc);
+
+        const updated = await writeDB(db);
+        res.json({ success: true, doc: newDoc, campusDocs: updated.campusDocs });
+    } catch (err) {
+        console.error('POST /api/campus-docs error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// 7. Delete Campus Document directly from MongoDB
 app.delete('/api/campus-docs/:id', async (req, res) => {
-    const { id } = req.params;
-    const db = await readDB();
+    try {
+        const { id } = req.params;
+        const db = await readDB();
 
-    if (db.campusDocs) {
-        db.campusDocs = db.campusDocs.filter(d => d.id !== id);
-        await writeDB(db);
+        if (db.campusDocs) {
+            db.campusDocs = db.campusDocs.filter(d => d.id !== id);
+        }
+
+        const updated = await writeDB(db);
+        res.json({ success: true, campusDocs: updated.campusDocs });
+    } catch (err) {
+        console.error('DELETE /api/campus-docs/:id error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-
-    res.json({ success: true, campusDocs: db.campusDocs });
 });
 
-// 7. Add Announcement / Special Class Note
+// 8. Add Announcement / Special Note to MongoDB
 app.post('/api/announcements', async (req, res) => {
-    const { title, content, badge } = req.body;
+    try {
+        const { title, content, badge } = req.body;
 
-    if (!title || !content) {
-        return res.status(400).json({ success: false, message: 'Title and content are required.' });
+        if (!title || !content) {
+            return res.status(400).json({ success: false, message: 'Title and content are required.' });
+        }
+
+        const db = await readDB();
+        const newAnn = {
+            id: 'ann-' + Date.now(),
+            badge: badge || 'General',
+            title,
+            content,
+            date: new Date().toISOString().split('T')[0]
+        };
+
+        if (!db.announcements) db.announcements = [];
+        db.announcements.unshift(newAnn);
+
+        const updated = await writeDB(db);
+        res.json({ success: true, announcement: newAnn, announcements: updated.announcements });
+    } catch (err) {
+        console.error('POST /api/announcements error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-
-    const db = await readDB();
-    const newAnn = {
-        id: 'ann-' + Date.now(),
-        badge: badge || 'General',
-        title,
-        content,
-        date: new Date().toISOString().split('T')[0]
-    };
-
-    if (!db.announcements) db.announcements = [];
-    db.announcements.unshift(newAnn);
-
-    await writeDB(db);
-    res.json({ success: true, announcement: newAnn, announcements: db.announcements });
 });
 
-// 8. Delete Announcement
+// 9. Delete Announcement directly from MongoDB
 app.delete('/api/announcements/:id', async (req, res) => {
-    const { id } = req.params;
-    const db = await readDB();
+    try {
+        const { id } = req.params;
+        const db = await readDB();
 
-    if (db.announcements) {
-        db.announcements = db.announcements.filter(a => a.id !== id);
-        await writeDB(db);
+        if (db.announcements) {
+            db.announcements = db.announcements.filter(a => a.id !== id);
+        }
+
+        const updated = await writeDB(db);
+        res.json({ success: true, announcements: updated.announcements });
+    } catch (err) {
+        console.error('DELETE /api/announcements/:id error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
-
-    res.json({ success: true, announcements: db.announcements });
 });
 
 // Fallback Route for Single Page Application
@@ -301,29 +375,23 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Export app for Vercel serverless deployment
+// Export app for Vercel
 module.exports = app;
 
-// Start Server (only when running locally, not on Vercel)
+// Start Server locally
 if (process.env.NODE_ENV !== 'production') {
     const server = app.listen(PORT, () => {
         console.log(`=======================================================`);
-        console.log(`🚀 Shared Academic Hub Server running on port ${PORT}`);
+        console.log(`🚀 Academic Hub Server running on port ${PORT}`);
+        console.log(`   Database: MongoDB Atlas (academic_hub)`);
+        console.log(`   Storage: Cloudinary Cloud CDN`);
         console.log(`   Local URL: http://localhost:${PORT}`);
-        if (process.env.MONGODB_URI) {
-            console.log(`   Database: Connected to Persistent Cloud Database`);
-        } else {
-            console.log(`   Database: Local/File Fallback (Set MONGODB_URI for cloud)`);
-        }
         console.log(`=======================================================`);
     });
 
     server.on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
-            console.log(`\n=======================================================`);
-            console.log(`ℹ️ Port ${PORT} is already running in the background!`);
-            console.log(`👉 Simply open your browser at: http://localhost:${PORT}`);
-            console.log(`=======================================================\n`);
+            console.log(`ℹ️ Port ${PORT} already in use. Please check running process.`);
             process.exit(0);
         } else {
             console.error('Server error:', err);

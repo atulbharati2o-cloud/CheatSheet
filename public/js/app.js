@@ -1,173 +1,20 @@
 // ==========================================================================
-// Shared Academic & Campus Hub - Main Client Application
+// Shared Academic & Campus Hub - Pure MongoDB & Cloudinary Frontend
 // ==========================================================================
 
 const API_BASE = '/api';
-const LOCAL_STORAGE_KEY = 'academic_hub_offline_backup_v3';
-const DELETED_IDS_KEY = 'academic_hub_deleted_ids_v1';
 
-function getDeletedIds() {
-    try {
-        const stored = localStorage.getItem(DELETED_IDS_KEY);
-        return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch (e) {
-        return new Set();
-    }
-}
-
-function trackDeletedId(id) {
-    if (!id) return;
-    const set = getDeletedIds();
-    set.add(id);
-    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(set)));
-}
-
-function getLocalDatabase() {
-    const local = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!local) return null;
-    try {
-        return JSON.parse(local);
-    } catch (e) {
-        return null;
-    }
-}
-
-function mergeDatabase(serverData, localData) {
-    const deletedIds = getDeletedIds();
-    const merged = {
-        resources: [],
-        campusDocs: [],
-        announcements: []
-    };
-
-    const sResources = (serverData && serverData.resources) || [];
-    const lResources = (localData && localData.resources) || [];
-
-    const groupsMap = new Map();
-
-    function processGroup(group) {
-        if (!group || !group.title) return;
-        const titleLower = group.title.toLowerCase();
-        if (!groupsMap.has(titleLower)) {
-            groupsMap.set(titleLower, {
-                category: group.category || 'Core Subject',
-                title: group.title,
-                links: []
-            });
-        }
-        const targetGroup = groupsMap.get(titleLower);
-
-        (group.links || []).forEach(link => {
-            if (!link || !link.id) return;
-            if (deletedIds.has(link.id)) return;
-
-            const existingIdx = targetGroup.links.findIndex(l => l.id === link.id);
-            if (existingIdx === -1) {
-                targetGroup.links.push({ ...link });
-            } else {
-                targetGroup.links[existingIdx] = {
-                    ...targetGroup.links[existingIdx],
-                    ...link
-                };
-            }
-        });
-    }
-
-    sResources.forEach(processGroup);
-    lResources.forEach(processGroup);
-
-    merged.resources = Array.from(groupsMap.values()).filter(g => g.links.length > 0);
-
-    const sDocs = (serverData && serverData.campusDocs) || [];
-    const lDocs = (localData && localData.campusDocs) || [];
-    const docsMap = new Map();
-
-    [...sDocs, ...lDocs].forEach(doc => {
-        if (!doc || !doc.id) return;
-        if (deletedIds.has(doc.id)) return;
-        if (!docsMap.has(doc.id)) {
-            docsMap.set(doc.id, { ...doc });
-        }
-    });
-    merged.campusDocs = Array.from(docsMap.values());
-
-    const sAnns = (serverData && serverData.announcements) || [];
-    const lAnns = (localData && localData.announcements) || [];
-    const annsMap = new Map();
-
-    [...sAnns, ...lAnns].forEach(ann => {
-        if (!ann || !ann.id) return;
-        if (deletedIds.has(ann.id)) return;
-        if (!annsMap.has(ann.id)) {
-            annsMap.set(ann.id, { ...ann });
-        }
-    });
-    merged.announcements = Array.from(annsMap.values());
-
-    return merged;
-}
-
-// Default Fallback Data if server is unreachable
-const defaultDatabase = {
-    resources: [
-        {
-            category: 'Quick Access',
-            title: 'Main University Drive',
-            links: [
-                { id: 'lnk-1', label: 'CSE Drive', href: 'https://drive.google.com/drive/folders/1tXxLKfFfA-3LmIS7XzSRTjG4d9Tw7ooS', note: 'Main CSE department shared folder for all semesters', pinned: true },
-                { id: 'lnk-2', label: '5th Semester Drive', href: 'https://drive.google.com/drive/folders/1TFjMZxKGUKWHtb3dy-XMWmFIPs9cJjtr', note: 'Semester 5 course slides, lab assignments & past papers', pinned: true }
-            ]
-        },
-        {
-            category: 'Core Subject',
-            title: 'Computer Networking',
-            links: [
-                { id: 'lnk-3', label: 'Jim Kurose Website', href: 'https://gaia.cs.umass.edu/kurose_ross/ppt.php', note: 'Official Kurose & Ross 8th edition lecture presentation slides', pinned: false },
-                { id: 'lnk-4', label: 'Jim Kurose YouTube Playlist', href: 'https://youtube.com/playlist?list=PLByK_3hwzY3Tysh-SY9MKZhMm9wIfNOas&si=LH4uJy3BSz6syP8E', note: 'Author video lectures on Socket programming & TCP/IP layer', pinned: false },
-                { id: 'lnk-5', label: 'CN Google Drive', href: 'https://drive.google.com/drive/folders/1DNI22B435dGajyfw4jJBNOeSA44rZDF2', note: 'Contains lab manuals, Wireshark PCAP files & PYQ solutions', pinned: true }
-            ]
-        },
-        {
-            category: 'Core Subject',
-            title: 'Operating System',
-            links: [
-                { id: 'lnk-6', label: 'OS Google Drive', href: 'https://drive.google.com/drive/folders/1_1iAjGGjXmdWbKSdVYTQ87E7AhuFcwRl', note: 'Process synchronization notes & CPU scheduling C programs', pinned: false }
-            ]
-        },
-        {
-            category: 'Core Subject',
-            title: 'NFT',
-            links: [
-                { id: 'lnk-7', label: 'NFT Google Drive', href: 'https://drive.google.com/drive/folders/1gE1Nq3XoCB2PH1O6s4uNZYK1Gs77ewan', note: 'Network Filter & Technology study resources', pinned: false }
-            ]
-        },
-        {
-            category: 'Core Subject',
-            title: 'IPU',
-            links: [
-                { id: 'lnk-8', label: 'IPU Google Drive', href: 'https://drive.google.com/drive/folders/1rXQeF3UbrASBfLzoutkN4d27msMVKMHt', note: 'Official university syllabus & exam circulars', pinned: false }
-            ]
-        }
-    ],
-    campusDocs: [
-        { id: 'doc-1', type: 'timetable', title: '5th Sem CSE Class Timetable (Fall 2026)', url: 'https://drive.google.com/drive/folders/1TFjMZxKGUKWHtb3dy-XMWmFIPs9cJjtr', note: 'Mon-Fri 9:00 AM to 5:00 PM • Room 304, Block C', updatedAt: '2026-08-25' },
-        { id: 'doc-2', type: 'mess', title: 'Hostel Mess Weekly Menu', url: '#', note: 'Special Lunch on Wednesdays & Sunday Dinner Dessert', updatedAt: '2026-08-20' },
-        { id: 'doc-3', type: 'exam', title: 'Mid-Term Examination Datesheet', url: '#', note: 'Exams start 15th October. CN on Day 1, OS on Day 3.', updatedAt: '2026-08-28' },
-        { id: 'doc-4', type: 'holiday', title: 'University Academic & Holiday Calendar 2026', url: '#', note: 'Includes list of gazetted holidays & semester break schedule', updatedAt: '2026-08-01' }
-    ],
-    announcements: [
-        { id: 'ann-1', badge: 'Exam', title: 'CN Lab Assignment 2 Deadline', content: 'Socket Programming assignment in Python/C is due by this Friday 11:59 PM. Submit on drive.', date: '2026-08-29' },
-        { id: 'ann-2', badge: 'Important', title: 'Guest Lecture on Cloud Operating Systems', content: 'Join us on Thursday at 2:00 PM in Seminar Hall B for the guest session.', date: '2026-08-28' }
-    ]
+// Live App State (Purely fetched and synced with MongoDB Atlas)
+let db = {
+    resources: [],
+    campusDocs: [],
+    announcements: []
 };
 
-// Global App State
-let db = { ...defaultDatabase };
 let activeTab = 'resources'; // 'resources' | 'campus' | 'announcements'
 let activeFilter = 'ALL';
 let searchQuery = '';
 let viewMode = 'grid';
-let isServerConnected = false;
 
 // DOM Elements
 const navTabResources = document.getElementById('nav-tab-resources');
@@ -220,33 +67,27 @@ const addAnnForm = document.getElementById('add-ann-form');
 
 const toastContainer = document.getElementById('toast-container');
 
-// Load Data from Server API or LocalStorage Backup
+// Fetch Live State directly from MongoDB Atlas
 async function fetchServerData() {
-    const localData = getLocalDatabase() || defaultDatabase;
     try {
         const response = await fetch(`${API_BASE}/data`);
         if (response.ok) {
             const res = await response.json();
             if (res.success && res.data) {
-                isServerConnected = true;
-                db = mergeDatabase(res.data, localData);
-                saveLocalBackup();
+                db = {
+                    resources: res.data.resources || [],
+                    campusDocs: res.data.campusDocs || [],
+                    announcements: res.data.announcements || []
+                };
                 render();
                 return;
             }
         }
+        showToast('Failed to load data from MongoDB.');
     } catch (e) {
-        console.warn('Server offline or unreachable. Falling back to local data.');
-        isServerConnected = false;
+        console.error('Server offline or MongoDB connection error:', e);
+        showToast('Could not connect to MongoDB server.');
     }
-
-    db = mergeDatabase(null, localData);
-    saveLocalBackup();
-    render();
-}
-
-function saveLocalBackup() {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
 }
 
 // Toast Notifications
@@ -266,7 +107,7 @@ function showToast(message) {
         toast.style.transform = 'translateY(10px)';
         toast.style.transition = 'all 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 2400);
+    }, 2500);
 }
 
 // Copy Link to Clipboard
@@ -300,6 +141,9 @@ function fallbackCopy(url) {
 // Helper: SVG Icon based on URL
 function getLinkIconSvg(url) {
     if (!url) return '';
+    if (url.includes('cloudinary.com') || url.includes('uploads')) {
+        return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+    }
     if (url.includes('drive.google.com')) {
         return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
     }
@@ -309,121 +153,93 @@ function getLinkIconSvg(url) {
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
 }
 
-// Toggle Pin Status
+// Toggle Pin Status directly in MongoDB
 async function togglePin(linkId) {
-    db.resources.forEach(group => {
-        group.links.forEach(link => {
-            if (link.id === linkId) link.pinned = !link.pinned;
-        });
-    });
-    saveLocalBackup();
-    render();
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources/${linkId}/pin`, { method: 'PATCH' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.resources) {
-                    db = mergeDatabase({ resources: data.resources }, db);
-                    saveLocalBackup();
-                    render();
-                }
+    try {
+        const res = await fetch(`${API_BASE}/resources/${linkId}/pin`, { method: 'PATCH' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.resources) {
+                db.resources = data.resources;
+                render();
+                showToast(data.pinned ? 'Link pinned to Quick Access' : 'Link unpinned');
             }
-        } catch (e) {
-            console.error('Failed to update pin on server', e);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to update pin in MongoDB');
         }
+    } catch (e) {
+        console.error('Failed to update pin on server', e);
+        showToast('Connection error. Could not update pin.');
     }
 }
 
-// Delete Resource Link
+// Delete Resource Link directly from MongoDB
 async function deleteLink(linkId) {
-    if (!confirm('Are you sure you want to delete this resource link for everyone?')) return;
+    if (!confirm('Are you sure you want to delete this resource link from MongoDB?')) return;
 
-    trackDeletedId(linkId);
-
-    db.resources.forEach(group => {
-        group.links = group.links.filter(l => l.id !== linkId);
-    });
-    db.resources = db.resources.filter(g => g.links.length > 0);
-    saveLocalBackup();
-    render();
-    showToast('Resource link removed');
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources/${linkId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.resources) {
-                    db = mergeDatabase({ resources: data.resources }, db);
-                    saveLocalBackup();
-                    render();
-                }
+    try {
+        const res = await fetch(`${API_BASE}/resources/${linkId}`, { method: 'DELETE' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.resources) {
+                db.resources = data.resources;
+                render();
+                showToast('Resource link deleted from MongoDB');
             }
-        } catch (e) {
-            console.error('Failed to delete on server', e);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to delete from MongoDB');
         }
+    } catch (e) {
+        console.error('Failed to delete on server', e);
+        showToast('Connection error. Could not delete resource.');
     }
 }
 
-// Delete Campus Document
+// Delete Campus Document directly from MongoDB
 async function deleteCampusDoc(docId) {
-    if (!confirm('Are you sure you want to delete this document?')) return;
+    if (!confirm('Are you sure you want to delete this document from MongoDB?')) return;
 
-    trackDeletedId(docId);
-
-    if (db.campusDocs) {
-        db.campusDocs = db.campusDocs.filter(d => d.id !== docId);
-    }
-    saveLocalBackup();
-    renderCampusView();
-    showToast('Document deleted');
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/campus-docs/${docId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.campusDocs) {
-                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
-                    saveLocalBackup();
-                    renderCampusView();
-                }
+    try {
+        const res = await fetch(`${API_BASE}/campus-docs/${docId}`, { method: 'DELETE' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.campusDocs) {
+                db.campusDocs = data.campusDocs;
+                renderCampusView();
+                showToast('Document deleted from MongoDB');
             }
-        } catch (e) {
-            console.error('Failed to delete campus doc on server', e);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to delete document');
         }
+    } catch (e) {
+        console.error('Failed to delete campus doc on server', e);
+        showToast('Connection error. Could not delete document.');
     }
 }
 
-// Delete Announcement
+// Delete Announcement directly from MongoDB
 async function deleteAnnouncement(annId) {
-    if (!confirm('Are you sure you want to remove this note?')) return;
+    if (!confirm('Are you sure you want to remove this note from MongoDB?')) return;
 
-    trackDeletedId(annId);
-
-    if (db.announcements) {
-        db.announcements = db.announcements.filter(a => a.id !== annId);
-    }
-    saveLocalBackup();
-    renderAnnouncementsView();
-    showToast('Special note removed');
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/announcements/${annId}`, { method: 'DELETE' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.announcements) {
-                    db = mergeDatabase({ announcements: data.announcements }, db);
-                    saveLocalBackup();
-                    renderAnnouncementsView();
-                }
+    try {
+        const res = await fetch(`${API_BASE}/announcements/${annId}`, { method: 'DELETE' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.announcements) {
+                db.announcements = data.announcements;
+                renderAnnouncementsView();
+                showToast('Special note removed from MongoDB');
             }
-        } catch (e) {
-            console.error('Failed to delete announcement on server', e);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to delete note');
         }
+    } catch (e) {
+        console.error('Failed to delete announcement on server', e);
+        showToast('Connection error. Could not delete note.');
     }
 }
 
@@ -433,9 +249,9 @@ function renderResourcesView() {
     let pinnedLinksCount = 0;
     const categoriesSet = new Set();
 
-    db.resources.forEach(group => {
+    (db.resources || []).forEach(group => {
         if (group.title) categoriesSet.add(group.title);
-        group.links.forEach(link => {
+        (group.links || []).forEach(link => {
             totalLinksCount++;
             if (link.pinned) pinnedLinksCount++;
         });
@@ -455,8 +271,8 @@ function renderResourcesView() {
 
     // Pinned Shelf
     const pinnedLinks = [];
-    db.resources.forEach(group => {
-        group.links.forEach(link => {
+    (db.resources || []).forEach(group => {
+        (group.links || []).forEach(link => {
             if (link.pinned) {
                 pinnedLinks.push({ ...link, subject: group.title });
             }
@@ -494,23 +310,23 @@ function renderResourcesView() {
 
     // Main Grid Filter
     const q = searchQuery.toLowerCase().trim();
-    let filteredGroups = db.resources.map(group => {
-        let links = group.links.filter(link => {
+    let filteredGroups = (db.resources || []).map(group => {
+        let links = (group.links || []).filter(link => {
             if (activeFilter === 'PINNED' && !link.pinned) return false;
             if (activeFilter !== 'ALL' && activeFilter !== 'PINNED' && group.title !== activeFilter && group.category !== activeFilter) return false;
 
             if (q) {
-                const matchLabel = link.label.toLowerCase().includes(q);
-                const matchSubject = group.title.toLowerCase().includes(q);
-                const matchCategory = group.category.toLowerCase().includes(q);
+                const matchLabel = (link.label || '').toLowerCase().includes(q);
+                const matchSubject = (group.title || '').toLowerCase().includes(q);
+                const matchCategory = (group.category || '').toLowerCase().includes(q);
                 const matchNote = (link.note || '').toLowerCase().includes(q);
-                const matchUrl = link.href.toLowerCase().includes(q);
+                const matchUrl = (link.href || '').toLowerCase().includes(q);
                 return matchLabel || matchSubject || matchCategory || matchNote || matchUrl;
             }
             return true;
         });
         return { ...group, links };
-    }).filter(group => group.links.length > 0);
+    }).filter(group => group.links && group.links.length > 0);
 
     if (filteredGroups.length === 0) {
         linksGrid.innerHTML = `
@@ -756,7 +572,7 @@ openAddAnnModalBtn.addEventListener('click', () => { addAnnModal.classList.add('
 closeAddAnnModalBtn.addEventListener('click', () => addAnnModal.classList.remove('open'));
 cancelAddAnnModalBtn.addEventListener('click', () => addAnnModal.classList.remove('open'));
 
-// Submit Modal 1: Add Resource Link
+// Submit Modal 1: Add Resource Link (Pure MongoDB & Cloudinary)
 addLinkForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = document.getElementById('link-subject').value.trim();
@@ -764,46 +580,64 @@ addLinkForm.addEventListener('submit', async (e) => {
     const label = document.getElementById('link-label').value.trim();
     const href = document.getElementById('link-url').value.trim();
     const note = document.getElementById('link-note').value.trim();
+    const fileInput = document.getElementById('link-file');
+    const submitBtn = document.getElementById('save-link-btn');
 
-    if (!title || !label || !href) return;
-
-    const newLink = { id: 'lnk-' + Date.now(), label, href, note: note || '', pinned: false };
-    let group = db.resources.find(g => g.title.toLowerCase() === title.toLowerCase());
-
-    if (group) {
-        group.links.push(newLink);
-    } else {
-        db.resources.push({ category: category || 'Core Subject', title, links: [newLink] });
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+    if (!title || !label || (!href && !hasFile)) {
+        showToast('Please provide a URL link or select a file to upload.');
+        return;
     }
 
-    saveLocalBackup();
-    addLinkForm.reset();
-    addModal.classList.remove('open');
-    render();
-    showToast(`Added "${label}"!`);
+    const origBtnText = submitBtn ? submitBtn.innerHTML : 'Save Resource';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = hasFile ? '⏳ Uploading to Cloudinary...' : 'Saving to MongoDB...';
+    }
 
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/resources`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ category, title, label, href, note })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.resources) {
-                    db = mergeDatabase({ resources: data.resources }, db);
-                    saveLocalBackup();
-                    render();
-                }
+    try {
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('category', category || 'Core Subject');
+        formData.append('label', label);
+        if (note) formData.append('note', note);
+
+        if (hasFile) {
+            formData.append('file', fileInput.files[0]);
+        } else {
+            formData.append('href', href);
+        }
+
+        const res = await fetch(`${API_BASE}/resources`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.resources) {
+                db.resources = data.resources;
+                render();
+                showToast(`Saved "${label}" to MongoDB!`);
+                addLinkForm.reset();
+                addModal.classList.remove('open');
             }
-        } catch (err) {
-            console.error('Failed to add link on server', err);
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.message || 'Failed to save resource in database');
+        }
+    } catch (err) {
+        console.error('Failed to add link on server', err);
+        showToast('Connection error. Failed to save.');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origBtnText;
         }
     }
 });
 
-// Submit Modal 2: Add Campus Document (PDF or URL)
+// Submit Modal 2: Add Campus Document (Pure MongoDB & Cloudinary)
 addDocForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const type = document.getElementById('doc-type').value;
@@ -811,79 +645,66 @@ addDocForm.addEventListener('submit', async (e) => {
     const url = document.getElementById('doc-url').value.trim();
     const note = document.getElementById('doc-note').value.trim();
     const fileInput = document.getElementById('doc-file');
+    const submitBtn = document.getElementById('save-doc-btn');
 
-    if (!type || !title) return;
-
-    // Helper: read file as a base64 data URL (works without server filesystem)
-    function readFileAsDataURL(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+    if (!type || !title || (!url && !hasFile)) {
+        showToast('Please provide a document title and a link or file.');
+        return;
     }
 
-    let finalUrl = url || '#';
+    const origBtnText = submitBtn ? submitBtn.innerHTML : 'Add Document';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = hasFile ? '⏳ Uploading to Cloudinary...' : 'Saving to MongoDB...';
+    }
 
-    // If a file was selected, embed it as a data URL so it can be opened directly
-    if (fileInput.files.length > 0) {
-        try {
-            finalUrl = await readFileAsDataURL(fileInput.files[0]);
-        } catch (err) {
-            console.error('Failed to read file:', err);
-            showToast('Could not read the selected file. Try using a Drive URL instead.');
-            return;
+    try {
+        const formData = new FormData();
+        formData.append('type', type);
+        formData.append('title', title);
+        if (note) formData.append('note', note);
+
+        if (hasFile) {
+            formData.append('file', fileInput.files[0]);
+        } else {
+            formData.append('url', url);
         }
-    }
 
-    const newDoc = {
-        id: 'doc-' + Date.now(),
-        type,
-        title,
-        url: finalUrl,
-        note: note || '',
-        updatedAt: new Date().toISOString().split('T')[0]
-    };
+        const res = await fetch(`${API_BASE}/campus-docs`, {
+            method: 'POST',
+            body: formData
+        });
 
-    if (!db.campusDocs) db.campusDocs = [];
-    db.campusDocs.unshift(newDoc);
-    saveLocalBackup();
-
-    addDocForm.reset();
-    addDocModal.classList.remove('open');
-
-    // Always switch to Campus tab so the user sees the added document
-    activeTab = 'campus';
-    navTabCampus.classList.add('active');
-    navTabResources.classList.remove('active');
-    navTabAnnouncements.classList.remove('active');
-    render();
-    showToast(`Added "${title}" to ${type === 'timetable' ? 'Timetable' : type === 'mess' ? 'Mess Menu' : type === 'exam' ? 'Exam Schedule' : 'Holiday Calendar'}!`);
-
-    // Also save to server (send URL, not binary file — Vercel serverless can't store files)
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/campus-docs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, title, url: finalUrl, note })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.campusDocs) {
-                    db = mergeDatabase({ campusDocs: data.campusDocs }, db);
-                    saveLocalBackup();
-                    render();
-                }
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.campusDocs) {
+                db.campusDocs = data.campusDocs;
+                activeTab = 'campus';
+                navTabCampus.classList.add('active');
+                navTabResources.classList.remove('active');
+                navTabAnnouncements.classList.remove('active');
+                render();
+                showToast(`Added "${title}" to MongoDB!`);
+                addDocForm.reset();
+                addDocModal.classList.remove('open');
             }
-        } catch (err) {
-            console.error('Failed to save campus document on server:', err);
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.message || 'Failed to upload document');
+        }
+    } catch (err) {
+        console.error('Failed to save campus document on server:', err);
+        showToast('Connection error. Failed to save.');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origBtnText;
         }
     }
 });
 
-// Submit Modal 3: Add Announcement
+// Submit Modal 3: Add Announcement (Pure MongoDB)
 addAnnForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const badge = document.getElementById('ann-badge').value;
@@ -892,52 +713,37 @@ addAnnForm.addEventListener('submit', async (e) => {
 
     if (!title || !content) return;
 
-    const newAnn = {
-        id: 'ann-' + Date.now(),
-        badge,
-        title,
-        content,
-        date: new Date().toISOString().split('T')[0]
-    };
+    try {
+        const res = await fetch(`${API_BASE}/announcements`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ badge, title, content })
+        });
 
-    if (!db.announcements) db.announcements = [];
-    db.announcements.unshift(newAnn);
-    saveLocalBackup();
-
-    addAnnForm.reset();
-    addAnnModal.classList.remove('open');
-    activeTab = 'announcements';
-    navTabAnnouncements.classList.add('active');
-    navTabResources.classList.remove('active');
-    navTabCampus.classList.remove('active');
-    render();
-    showToast(`Posted note "${title}"`);
-
-    if (isServerConnected) {
-        try {
-            const res = await fetch(`${API_BASE}/announcements`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ badge, title, content })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.announcements) {
-                    db = mergeDatabase({ announcements: data.announcements }, db);
-                    saveLocalBackup();
-                    render();
-                }
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.announcements) {
+                db.announcements = data.announcements;
+                activeTab = 'announcements';
+                navTabAnnouncements.classList.add('active');
+                navTabResources.classList.remove('active');
+                navTabCampus.classList.remove('active');
+                render();
+                showToast(`Posted note "${title}"`);
+                addAnnForm.reset();
+                addAnnModal.classList.remove('open');
             }
-        } catch (err) {
-            console.error('Failed to save announcement to server', err);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to post note');
         }
+    } catch (err) {
+        console.error('Failed to post announcement on server:', err);
+        showToast('Connection error. Failed to post note.');
     }
 });
 
-// Background Polling (Every 10 seconds for real-time collaboration with colleagues)
-setInterval(() => {
+// Initialize Application on Page Load
+document.addEventListener('DOMContentLoaded', () => {
     fetchServerData();
-}, 10000);
-
-// Initialize Application
-fetchServerData();
+});
