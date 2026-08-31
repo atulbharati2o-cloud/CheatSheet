@@ -50,12 +50,11 @@ function uploadToCloudinary(file, folder = 'academic_hub') {
         const uploadStream = cloudinary.uploader.upload_stream(
             {
                 folder,
-                public_id: file.mimetype === 'application/pdf'
-                    ? `${cleanName}-${Date.now()}.pdf`
-                    : `${cleanName}-${Date.now()}`,
+                // Do NOT add .pdf to public_id — Cloudinary adds the format
+                // automatically. Adding it caused double extension (.pdf.pdf).
+                public_id: `${cleanName}-${Date.now()}`,
                 resource_type: 'auto',
-                // Force public delivery — without this Cloudinary marks files as
-                // "Blocked for delivery" causing 401 when the proxy tries to fetch.
+                // Force public delivery at upload time
                 access_mode: 'public'
             },
             (error, result) => {
@@ -390,23 +389,46 @@ app.delete('/api/announcements/:id', async (req, res) => {
     }
 });
 
-// PDF Proxy: Fetches PDF from Cloudinary and serves it inline so the browser
-// PDF viewer opens it instead of downloading. Google Docs Viewer was unreliable
-// ("No preview available") because Cloudinary CDN blocks its fetcher.
+// PDF Proxy: Generates a signed Cloudinary URL (bypasses account-level delivery
+// restrictions that cause 401) then proxies the PDF with Content-Disposition: inline
+// so Chrome's native PDF viewer renders it instead of downloading.
 app.get('/api/view-pdf', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).send('Missing url parameter');
 
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Cloudinary returned ${response.status}`);
+        // Parse public_id and resource_type from the Cloudinary URL
+        // Format: https://res.cloudinary.com/{cloud}/{resource_type}/upload/v{ver}/{public_id}
+        const urlObj = new URL(url);
+        const parts = urlObj.pathname.split('/').filter(Boolean);
+        // parts: [cloud_name, resource_type, 'upload', 'v123...', ...public_id_parts]
+        const resourceType = parts[1]; // 'image', 'raw', 'video'
+        const uploadIdx = parts.indexOf('upload');
+        let publicIdParts = parts.slice(uploadIdx + 1);
+        // Remove version segment like v1788210704
+        if (publicIdParts[0] && /^v\d+$/.test(publicIdParts[0])) {
+            publicIdParts = publicIdParts.slice(1);
+        }
+        const publicId = publicIdParts.join('/');
+
+        // Generate a signed URL — this includes an auth signature in the URL
+        // itself so it works even when the account has delivery restrictions.
+        const signedUrl = cloudinary.url(publicId, {
+            resource_type: resourceType || 'image',
+            type: 'upload',
+            sign_url: true,
+            secure: true
+        });
+
+        const response = await fetch(signedUrl);
+        if (!response.ok) throw new Error(`Cloudinary returned ${response.status} (public_id: ${publicId})`);
 
         const buffer = await response.arrayBuffer();
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': 'inline',
             'Content-Length': buffer.byteLength,
-            'Cache-Control': 'public, max-age=86400'
+            'Cache-Control': 'public, max-age=3600'
         });
         res.send(Buffer.from(buffer));
     } catch (err) {
