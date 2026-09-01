@@ -411,17 +411,27 @@ app.get('/api/view-pdf', async (req, res) => {
         }
         const publicId = publicIdParts.join('/');
 
-        // Generate a signed URL — this includes an auth signature in the URL
-        // itself so it works even when the account has delivery restrictions.
-        const signedUrl = cloudinary.url(publicId, {
+        // Strip the file extension from public_id and pass it separately as
+        // `format`. If the extension is left inside the public_id string,
+        // Cloudinary's url() helper appends it a second time, producing a
+        // malformed signature that returns 401.
+        const extMatch = publicId.match(/\.([a-zA-Z0-9]+)$/);
+        const format = extMatch ? extMatch[1] : 'pdf';
+        const publicIdWithoutExt = extMatch ? publicId.slice(0, -extMatch[0].length) : publicId;
+
+        // Generate a signed URL — the auth signature is embedded in the URL
+        // so it works even when the Cloudinary account has delivery restrictions.
+        const signedUrl = cloudinary.url(publicIdWithoutExt, {
             resource_type: resourceType || 'image',
             type: 'upload',
+            format,
             sign_url: true,
             secure: true
         });
 
+        console.log(`[view-pdf] publicId="${publicIdWithoutExt}" format="${format}" signedUrl=${signedUrl}`);
         const response = await fetch(signedUrl);
-        if (!response.ok) throw new Error(`Cloudinary returned ${response.status} (public_id: ${publicId})`);
+        if (!response.ok) throw new Error(`Cloudinary returned ${response.status} (public_id: ${publicIdWithoutExt}.${format}, signed_url: ${signedUrl})`);
 
         const buffer = await response.arrayBuffer();
         res.set({
