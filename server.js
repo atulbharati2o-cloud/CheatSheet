@@ -46,14 +46,22 @@ function uploadToCloudinary(file, folder = 'academic_hub') {
         if (!isCloudinaryConfigured) {
             return reject(new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME in .env'));
         }
+        const originalExt = path.extname(file.originalname).toLowerCase();
         const cleanName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        
+        // Cloudinary blocks PDF delivery as 'image' by default for security.
+        // We must upload them as 'raw' to allow public viewing.
+        // Other non-image/video files should also be 'raw'.
+        const isImageOrVideo = /^\.(jpe?g|png|gif|webp|mp4|webm|mov)$/i.test(originalExt);
+        const resourceType = isImageOrVideo ? 'auto' : 'raw';
+        
         const uploadStream = cloudinary.uploader.upload_stream(
             {
                 folder,
-                // Do NOT add .pdf to public_id — Cloudinary adds the format
-                // automatically. Adding it caused double extension (.pdf.pdf).
-                public_id: `${cleanName}-${Date.now()}`,
-                resource_type: 'auto',
+                // For 'raw' files, Cloudinary does NOT auto-append the extension,
+                // so we must include it in the public_id. For 'auto' (images), it does.
+                public_id: resourceType === 'raw' ? `${cleanName}-${Date.now()}${originalExt}` : `${cleanName}-${Date.now()}`,
+                resource_type: resourceType,
                 // Force public delivery at upload time
                 access_mode: 'public'
             },
@@ -418,8 +426,10 @@ app.get('/api/view-pdf', async (req, res) => {
         if (!response.ok) throw new Error(`Cloudinary returned ${response.status} for ${url}`);
 
         const buffer = await response.arrayBuffer();
+        const contentType = response.headers.get('content-type') || 'application/pdf';
+        
         res.set({
-            'Content-Type': 'application/pdf',
+            'Content-Type': contentType,
             'Content-Disposition': 'inline',
             'Content-Length': buffer.byteLength,
             'Cache-Control': 'public, max-age=3600'

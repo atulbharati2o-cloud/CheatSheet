@@ -13,11 +13,8 @@ const API_BASE = '/api';
 function getViewableUrl(url) {
     if (!url) return url;
     const lower = url.toLowerCase();
-    const isPdf = lower.endsWith('.pdf')
-        || (lower.includes('res.cloudinary.com') && (
-            lower.includes('/raw/upload/')
-            || lower.includes('/image/upload/')
-        ));
+    // Only route actual PDF files through the view-pdf proxy
+    const isPdf = lower.endsWith('.pdf');
     if (isPdf) {
         return `/api/view-pdf?url=${encodeURIComponent(url)}`;
     }
