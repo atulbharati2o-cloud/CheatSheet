@@ -389,49 +389,33 @@ app.delete('/api/announcements/:id', async (req, res) => {
     }
 });
 
-// PDF Proxy: Generates a signed Cloudinary URL (bypasses account-level delivery
-// restrictions that cause 401) then proxies the PDF with Content-Disposition: inline
-// so Chrome's native PDF viewer renders it instead of downloading.
+// PDF Proxy: Fetches the Cloudinary PDF server-side and streams it with
+// Content-Disposition: inline so Chrome's native PDF viewer renders it.
+// A server-side fetch is used to avoid browser CORS restrictions.
+// Files are uploaded with access_mode: 'public', so no signing is needed —
+// and signing caused 401s because the Cloudinary SDK added the wrong version
+// segment (v1 instead of the real timestamp version), invalidating the signature.
 app.get('/api/view-pdf', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).send('Missing url parameter');
 
+    // Security: only proxy Cloudinary URLs
+    let parsedUrl;
     try {
-        // Parse public_id and resource_type from the Cloudinary URL
-        // Format: https://res.cloudinary.com/{cloud}/{resource_type}/upload/v{ver}/{public_id}
-        const urlObj = new URL(url);
-        const parts = urlObj.pathname.split('/').filter(Boolean);
-        // parts: [cloud_name, resource_type, 'upload', 'v123...', ...public_id_parts]
-        const resourceType = parts[1]; // 'image', 'raw', 'video'
-        const uploadIdx = parts.indexOf('upload');
-        let publicIdParts = parts.slice(uploadIdx + 1);
-        // Remove version segment like v1788210704
-        if (publicIdParts[0] && /^v\d+$/.test(publicIdParts[0])) {
-            publicIdParts = publicIdParts.slice(1);
-        }
-        const publicId = publicIdParts.join('/');
+        parsedUrl = new URL(url);
+    } catch {
+        return res.status(400).send('Invalid URL');
+    }
+    if (!parsedUrl.hostname.endsWith('cloudinary.com')) {
+        return res.status(400).send('Only Cloudinary URLs are supported');
+    }
 
-        // Strip the file extension from public_id and pass it separately as
-        // `format`. If the extension is left inside the public_id string,
-        // Cloudinary's url() helper appends it a second time, producing a
-        // malformed signature that returns 401.
-        const extMatch = publicId.match(/\.([a-zA-Z0-9]+)$/);
-        const format = extMatch ? extMatch[1] : 'pdf';
-        const publicIdWithoutExt = extMatch ? publicId.slice(0, -extMatch[0].length) : publicId;
-
-        // Generate a signed URL — the auth signature is embedded in the URL
-        // so it works even when the Cloudinary account has delivery restrictions.
-        const signedUrl = cloudinary.url(publicIdWithoutExt, {
-            resource_type: resourceType || 'image',
-            type: 'upload',
-            format,
-            sign_url: true,
-            secure: true
-        });
-
-        console.log(`[view-pdf] publicId="${publicIdWithoutExt}" format="${format}" signedUrl=${signedUrl}`);
-        const response = await fetch(signedUrl);
-        if (!response.ok) throw new Error(`Cloudinary returned ${response.status} (public_id: ${publicIdWithoutExt}.${format}, signed_url: ${signedUrl})`);
+    try {
+        // Direct server-side fetch — CORS does not apply here.
+        // Since files are public, no authentication header is required.
+        console.log(`[view-pdf] Fetching: ${url}`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Cloudinary returned ${response.status} for ${url}`);
 
         const buffer = await response.arrayBuffer();
         res.set({
