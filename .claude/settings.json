@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node test/moderation.test.js)"
+      "Bash(node test/moderation.test.js)",
+      "Bash(node --check public/js/app.js)",
+      "Bash(node --check server.js)"
     ]
   }
 }

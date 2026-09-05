@@ -24,6 +24,44 @@ function getViewableUrl(url) {
     return url;
 }
 
+/**
+ * Uploads a file straight from the browser to Cloudinary, bypassing our
+ * serverless function (Vercel caps request bodies at ~4.5MB — multi-page
+ * PDFs blew past that). The server only signs the request; the file never
+ * passes through it. Returns the Cloudinary secure_url.
+ */
+async function uploadDirectToCloudinary(file, folder) {
+    const ext = (file.name.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    const isImageOrVideo = /\.(jpe?g|png|gif|webp|mp4|webm|mov)$/i.test(ext);
+    const resourceType = isImageOrVideo ? 'auto' : 'raw';
+    const cleanName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    // raw files don't get the extension auto-appended, so bake it into public_id
+    const publicId = resourceType === 'raw' ? `${cleanName}-${Date.now()}${ext}` : `${cleanName}-${Date.now()}`;
+
+    const signRes = await fetch(`${API_BASE}/sign-upload?folder=${encodeURIComponent(folder)}&public_id=${encodeURIComponent(publicId)}`);
+    const s = await signRes.json();
+    if (!s.success) throw new Error(s.message || 'Could not sign upload');
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('api_key', s.apiKey);
+    fd.append('timestamp', s.timestamp);
+    fd.append('folder', s.folder);
+    fd.append('public_id', publicId);
+    fd.append('access_mode', 'public');
+    fd.append('signature', s.signature);
+
+    const up = await fetch(`https://api.cloudinary.com/v1_1/${s.cloudName}/${resourceType}/upload`, {
+        method: 'POST',
+        body: fd
+    });
+    const result = await up.json();
+    if (!up.ok || !result.secure_url) {
+        throw new Error((result.error && result.error.message) || 'Cloudinary upload failed');
+    }
+    return result.secure_url;
+}
+
 // Live App State (Purely fetched and synced with MongoDB Atlas)
 let db = {
     resources: [],
@@ -619,21 +657,23 @@ addLinkForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const formData = new FormData();
-        formData.append('title', title);
-        formData.append('category', category || 'Core Subject');
-        formData.append('label', label);
-        if (note) formData.append('note', note);
-
+        // Big files go browser -> Cloudinary directly; only the resulting URL
+        // is sent to our API (Vercel caps serverless request bodies at ~4.5MB).
+        let finalHref = href;
         if (hasFile) {
-            formData.append('file', fileInput.files[0]);
-        } else {
-            formData.append('href', href);
+            finalHref = await uploadDirectToCloudinary(fileInput.files[0], 'academic_hub/resources');
         }
 
         const res = await fetch(`${API_BASE}/resources`, {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title,
+                category: category || 'Core Subject',
+                label,
+                href: finalHref,
+                note
+            })
         });
 
         if (res.ok) {
@@ -683,20 +723,15 @@ addDocForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const formData = new FormData();
-        formData.append('type', type);
-        formData.append('title', title);
-        if (note) formData.append('note', note);
-
+        let finalUrl = url;
         if (hasFile) {
-            formData.append('file', fileInput.files[0]);
-        } else {
-            formData.append('url', url);
+            finalUrl = await uploadDirectToCloudinary(fileInput.files[0], 'academic_hub/campus_docs');
         }
 
         const res = await fetch(`${API_BASE}/campus-docs`, {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, title, url: finalUrl, note })
         });
 
         if (res.ok) {

@@ -219,6 +219,31 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
+// 2b. Sign a direct browser -> Cloudinary upload.
+// Vercel serverless functions cap the request body at ~4.5MB, so anything
+// bigger must go straight from the browser to Cloudinary, not through here.
+// The browser sends back the resulting secure_url as a normal link.
+app.get('/api/sign-upload', (req, res) => {
+    if (!isCloudinaryConfigured) {
+        return res.status(500).json({ success: false, message: 'Cloudinary is not configured' });
+    }
+    const folder = String(req.query.folder || 'academic_hub/uploads');
+    const publicId = String(req.query.public_id || '');
+    const timestamp = Math.round(Date.now() / 1000);
+    const paramsToSign = { access_mode: 'public', folder, timestamp };
+    if (publicId) paramsToSign.public_id = publicId;
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
+    res.json({
+        success: true,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        timestamp,
+        folder,
+        publicId,
+        signature
+    });
+});
+
 // 3. Add Resource Link / File to MongoDB
 app.post('/api/resources', upload.single('file'), async (req, res) => {
     try {
