@@ -13,10 +13,13 @@ const API_BASE = '/api';
 function getViewableUrl(url) {
     if (!url) return url;
     const lower = url.toLowerCase();
-    // Only route actual PDF files through the view-pdf proxy
-    const isPdf = lower.endsWith('.pdf');
-    if (isPdf) {
+    // PDFs: stream through the local proxy so Chrome renders them inline
+    if (lower.endsWith('.pdf')) {
         return `/api/view-pdf?url=${encodeURIComponent(url)}`;
+    }
+    // Office files: render via Microsoft's public Office viewer (needs a public URL — Cloudinary is)
+    if (/\.(docx?|xlsx?|pptx?)$/.test(lower)) {
+        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
     }
     return url;
 }
@@ -307,7 +310,7 @@ function renderResourcesView() {
                         ${getLinkIconSvg(item.href)}
                     </div>
                     <div>
-                        <a href="${item.href}" target="_blank" rel="noreferrer" class="pinned-item-title" title="${item.label}">
+                        <a href="${getViewableUrl(item.href)}" target="_blank" rel="noreferrer" class="pinned-item-title" title="${item.label}">
                             ${item.label}
                         </a>
                         <div style="font-size: 0.72rem; color: var(--text-dim);">${item.subject}</div>
@@ -376,7 +379,7 @@ function renderResourcesView() {
                         <div class="link-item-main">
                             <div class="link-item-left">
                                 <span class="link-icon">${getLinkIconSvg(link.href)}</span>
-                                <a href="${link.href}" target="_blank" rel="noreferrer" title="${link.label}">${link.label}</a>
+                                <a href="${getViewableUrl(link.href)}" target="_blank" rel="noreferrer" title="${link.label}">${link.label}</a>
                             </div>
                             <div class="link-actions">
                                 <button class="action-icon-btn" onclick="copyLink('${link.href}')" title="Copy Link">
@@ -638,7 +641,7 @@ addLinkForm.addEventListener('submit', async (e) => {
             if (data.success && data.resources) {
                 db.resources = data.resources;
                 render();
-                showToast(`Saved "${label}" to MongoDB!`);
+                showToast('Submitted — pending admin approval');
                 addLinkForm.reset();
                 addModal.classList.remove('open');
             }
@@ -705,7 +708,7 @@ addDocForm.addEventListener('submit', async (e) => {
                 navTabResources.classList.remove('active');
                 navTabAnnouncements.classList.remove('active');
                 render();
-                showToast(`Added "${title}" to MongoDB!`);
+                showToast('Submitted — pending admin approval');
                 addDocForm.reset();
                 addDocModal.classList.remove('open');
             }
@@ -749,7 +752,7 @@ addAnnForm.addEventListener('submit', async (e) => {
                 navTabResources.classList.remove('active');
                 navTabCampus.classList.remove('active');
                 render();
-                showToast(`Posted note "${title}"`);
+                showToast('Submitted — pending admin approval');
                 addAnnForm.reset();
                 addAnnModal.classList.remove('open');
             }

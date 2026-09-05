@@ -9,6 +9,23 @@ const cloudinary = require('cloudinary').v2;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ponytail: hardcoded admin password as requested; env override wins if present.
+// Anyone with repo access can read this — rotate via ADMIN_PASSWORD env, not a code edit, in real deployments.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'campus-vault-admin-2026';
+// Header only — no ?pass= query fallback, which would leak the password into logs and browser history.
+const isAdmin = req => req.get('x-admin-pass') === ADMIN_PASSWORD;
+
+// Public view = everything except items still awaiting admin approval
+function publicView(data) {
+    return {
+        resources: (data.resources || [])
+            .map(g => ({ ...g, links: (g.links || []).filter(l => !l.pending) }))
+            .filter(g => g.links && g.links.length > 0),
+        campusDocs: (data.campusDocs || []).filter(d => !d.pending),
+        announcements: (data.announcements || []).filter(a => !a.pending)
+    };
+}
+
 // Verify MongoDB Connection String
 if (!process.env.MONGODB_URI) {
     console.error('❌ MONGODB_URI is not set in .env');
@@ -176,7 +193,7 @@ app.get('/api/status', (req, res) => {
 app.get('/api/data', async (req, res) => {
     try {
         const data = await readDB();
-        res.json({ success: true, data });
+        res.json({ success: true, data: publicView(data) });
     } catch (err) {
         console.error('GET /api/data error:', err.message);
         res.status(500).json({ success: false, message: err.message });
@@ -226,7 +243,8 @@ app.post('/api/resources', upload.single('file'), async (req, res) => {
             label,
             href,
             note: note || '',
-            pinned: false
+            pinned: false,
+            pending: true
         };
 
         if (group) {
@@ -240,7 +258,7 @@ app.post('/api/resources', upload.single('file'), async (req, res) => {
         }
 
         const updated = await writeDB(db);
-        res.json({ success: true, link: newLink, resources: updated.resources });
+        res.json({ success: true, link: newLink, resources: publicView(updated).resources });
     } catch (err) {
         console.error('POST /api/resources error:', err.message);
         res.status(500).json({ success: false, message: err.message });
@@ -318,14 +336,15 @@ app.post('/api/campus-docs', upload.single('file'), async (req, res) => {
             title,
             url: fileUrl,
             note: note || '',
-            updatedAt: new Date().toISOString().split('T')[0]
+            updatedAt: new Date().toISOString().split('T')[0],
+            pending: true
         };
 
         if (!db.campusDocs) db.campusDocs = [];
         db.campusDocs.unshift(newDoc);
 
         const updated = await writeDB(db);
-        res.json({ success: true, doc: newDoc, campusDocs: updated.campusDocs });
+        res.json({ success: true, doc: newDoc, campusDocs: publicView(updated).campusDocs });
     } catch (err) {
         console.error('POST /api/campus-docs error:', err.message);
         res.status(500).json({ success: false, message: err.message });
@@ -365,14 +384,15 @@ app.post('/api/announcements', async (req, res) => {
             badge: badge || 'General',
             title,
             content,
-            date: new Date().toISOString().split('T')[0]
+            date: new Date().toISOString().split('T')[0],
+            pending: true
         };
 
         if (!db.announcements) db.announcements = [];
         db.announcements.unshift(newAnn);
 
         const updated = await writeDB(db);
-        res.json({ success: true, announcement: newAnn, announcements: updated.announcements });
+        res.json({ success: true, announcement: newAnn, announcements: publicView(updated).announcements });
     } catch (err) {
         console.error('POST /api/announcements error:', err.message);
         res.status(500).json({ success: false, message: err.message });
@@ -441,6 +461,69 @@ app.get('/api/view-pdf', async (req, res) => {
     }
 });
 
+// ---- Admin moderation (hardcoded password, see ADMIN_PASSWORD) ----
+
+// List everything awaiting approval
+app.get('/api/admin/pending', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    try {
+        const db = await readDB();
+        const pending = [];
+        (db.resources || []).forEach(g => (g.links || []).forEach(l => {
+            if (l.pending) pending.push({ kind: 'resource', id: l.id, group: g.title, category: g.category, label: l.label, href: l.href, note: l.note });
+        }));
+        (db.campusDocs || []).forEach(d => {
+            if (d.pending) pending.push({ kind: 'campusDoc', id: d.id, docType: d.type, title: d.title, href: d.url, note: d.note });
+        });
+        (db.announcements || []).forEach(a => {
+            if (a.pending) pending.push({ kind: 'announcement', id: a.id, badge: a.badge, title: a.title, note: a.content });
+        });
+        res.json({ success: true, pending });
+    } catch (err) {
+        console.error('GET /api/admin/pending error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Approve (make public) or reject (discard) one pending item
+app.post('/api/admin/moderate', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const { kind, id, action } = req.body || {};
+    if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ success: false, message: 'action must be "approve" or "reject"' });
+    }
+    try {
+        const db = await readDB();
+        let found = false;
+
+        if (kind === 'resource') {
+            db.resources.forEach(g => {
+                (g.links || []).forEach(l => { if (l.id === id) { found = true; if (action === 'approve') l.pending = false; } });
+                if (action === 'reject') g.links = (g.links || []).filter(l => l.id !== id);
+            });
+            db.resources = db.resources.filter(g => g.links && g.links.length > 0);
+        } else if (kind === 'campusDoc') {
+            (db.campusDocs || []).forEach(d => { if (d.id === id) { found = true; if (action === 'approve') d.pending = false; } });
+            if (action === 'reject') db.campusDocs = (db.campusDocs || []).filter(d => d.id !== id);
+        } else if (kind === 'announcement') {
+            (db.announcements || []).forEach(a => { if (a.id === id) { found = true; if (action === 'approve') a.pending = false; } });
+            if (action === 'reject') db.announcements = (db.announcements || []).filter(a => a.id !== id);
+        } else {
+            return res.status(400).json({ success: false, message: 'Unknown kind' });
+        }
+
+        if (!found && action === 'approve') {
+            return res.status(404).json({ success: false, message: 'Item not found' });
+        }
+
+        await writeDB(db);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('POST /api/admin/moderate error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // Fallback Route for Single Page Application
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -448,6 +531,7 @@ app.get('*', (req, res) => {
 
 // Export app for Vercel
 module.exports = app;
+module.exports.publicView = publicView;
 
 // Start Server locally
 if (process.env.NODE_ENV !== 'production') {
